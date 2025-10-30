@@ -1,6 +1,7 @@
 from fastapi import FastAPI, Request
 import httpx
 import os
+import unicodedata
 
 app = FastAPI()
 
@@ -11,13 +12,22 @@ PHONE_ID = os.environ.get("PHONE_ID")  # id del número de WhatsApp Cloud API
 SCRAPER_URL = "https://scraper-pasos-ar-184988071501.southamerica-east1.run.app/scrapear"
 
 # --- FUNCIONES DE LOGICA ---
+def normalizar(texto):
+    """Convierte a minúsculas, quita acentos y espacios extra."""
+    if not texto:
+        return ""
+    texto = texto.strip().lower()
+    texto = unicodedata.normalize("NFD", texto)
+    texto = "".join(c for c in texto if unicodedata.category(c) != "Mn")  # elimina acentos
+    return texto
+
 def procesar_mensaje(user_text, pasos_data):
-    texto = user_text.strip().lower()
-    
+    texto = normalizar(user_text)
+
     # --- 1) Buscar por estado ---
     if "abierto" in texto or "cerrado" in texto:
         estado_req = "Abierto" if "abierto" in texto else "Cerrado"
-        pasos_filtrados = [p for p in pasos_data if p.get("estado", "").lower() == estado_req.lower()]
+        pasos_filtrados = [p for p in pasos_data if normalizar(p.get("estado","")) == normalizar(estado_req)]
         if not pasos_filtrados:
             return f"No hay pasos {estado_req}s."
         msg = f"*Pasos internacionales {estado_req.lower()}s*\n"
@@ -26,12 +36,12 @@ def procesar_mensaje(user_text, pasos_data):
             msg += f"{icono} *{p.get('nombre','')}*\n"
         return msg.strip()
 
-    # --- 2) Buscar por nombre de paso (parcial) ---
-    pasos_nombre = [p for p in pasos_data if texto in p.get("nombre", "").lower()]
+    # --- 2) Buscar por nombre de paso ---
+    pasos_nombre = [p for p in pasos_data if texto in normalizar(p.get("nombre",""))]
     if pasos_nombre:
         msg = ""
         for p in pasos_nombre:
-            estado = p.get("estado", "").lower()
+            estado = normalizar(p.get("estado",""))
             icono = "🟢" if "abierto" in estado else "🔴" if "cerrado" in estado else "⚪"
             msg += (f"*Paso internacional {p.get('nombre','')}*\n"
                     f"{p.get('localidades','')}\n"
@@ -39,12 +49,12 @@ def procesar_mensaje(user_text, pasos_data):
                     f"{p.get('ultima_actualizacion','')}\n")
         return msg.strip()
 
-    # --- 3) Buscar por provincia (parcial) ---
-    pasos_prov = [p for p in pasos_data if texto in p.get("provincia", "").lower()]
+    # --- 3) Buscar por provincia ---
+    pasos_prov = [p for p in pasos_data if texto in normalizar(p.get("provincia",""))]
     if pasos_prov:
-        msg = f"*Pasos internacionales en {pasos_prov[0].get('provincia','')}:*\n"
+        msg = f"*Pasos internacionales en {pasos_prov[0].get('provincia','')}*\n"
         for p in pasos_prov:
-            estado = p.get("estado", "").lower()
+            estado = normalizar(p.get("estado",""))
             icono = "🟢" if "abierto" in estado else "🔴" if "cerrado" in estado else "⚪"
             msg += (f"\n*Paso internacional {p.get('nombre','')}*\n"
                     f"{p.get('localidades','')}\n"
@@ -52,26 +62,22 @@ def procesar_mensaje(user_text, pasos_data):
                     f"{p.get('ultima_actualizacion','')}\n")
         return msg.strip()
 
-    # --- 4) Buscar por país limítrofe (parcial) ---
-    paises_validos = ["chile", "uruguay", "brasil", "bolivia", "paraguay"]
-    pais_coincide = [p for p in paises_validos if p in texto]
-    if pais_coincide:
-        pais = pais_coincide[0]
-        pasos_pais = [p for p in pasos_data if pais in p.get("pais", "").lower()]
-        if pasos_pais:
-            msg = f"*Pasos internacionales con {pais.capitalize()}:*\n"
-            for paso in pasos_pais:
-                estado = paso.get("estado", "").lower()
-                icono = "🟢" if "abierto" in estado else "🔴" if "cerrado" in estado else "⚪"
-                msg += (f"\n*Paso internacional {paso.get('nombre','')}*\n"
-                        f"{paso.get('localidades','')}\n"
-                        f"{paso.get('estado','')} {icono}\n"
-                        f"{paso.get('ultima_actualizacion','')}\n")
-            return msg.strip()
+    # --- 4) Buscar por país ---
+    pasos_pais = [p for p in pasos_data if texto in normalizar(p.get("pais",""))]
+    if pasos_pais:
+        msg = f"*Pasos internacionales con {pasos_pais[0].get('pais','')}*\n"
+        for paso in pasos_pais:
+            estado = normalizar(paso.get("estado",""))
+            icono = "🟢" if "abierto" in estado else "🔴" if "cerrado" in estado else "⚪"
+            msg += (f"\n*Paso internacional {paso.get('nombre','')}*\n"
+                    f"{paso.get('localidades','')}\n"
+                    f"{paso.get('estado','')} {icono}\n"
+                    f"{paso.get('ultima_actualizacion','')}\n")
+        return msg.strip()
 
     # --- 5) Mensaje de bienvenida si no se encontró nada ---
     return ("Consultá el estado de los pasos internacionales de Argentina en tiempo real.\n"
-            "Ingresá el nombre del paso, la provincia en la que se encuentra o el país limítrofe con el que conecta 👉​")
+            "Ingresá el nombre del paso, la provincia en la que se encuentra o el país con el que conecta. 👉​")
 
 # --- FUNCIONES ASINCRÓNICAS ---
 async def enviar_respuesta(to_number, mensaje):
@@ -133,4 +139,5 @@ async def webhook(request: Request):
                     await enviar_respuesta(from_number, resultado)
 
     return {"status": "ok"}
+
 
