@@ -1,8 +1,12 @@
 from flask import Flask, request
 import requests
 import os
+import logging
 
 app = Flask(__name__)
+
+# --- LOGGING ---
+logging.basicConfig(level=logging.INFO)
 
 # --- CONFIGURACIÓN ---
 VERIFY_TOKEN = os.environ.get("VERIFY_TOKEN", "a8F3kPzR9wY2qLbH5tJv6mX1sC4nD0eQ")
@@ -109,8 +113,9 @@ def enviar_respuesta(numero, texto):
     }
     try:
         requests.post(url, headers=headers, json=payload, timeout=10)
+        logging.info(f"Respuesta enviada a {numero}: {texto}")
     except Exception as e:
-        print(f"Error al enviar mensaje: {e}.")
+        logging.info(f"Error al enviar mensaje: {e}.")
 
 
 # --- RECEPCIÓN DE MENSAJES ---
@@ -133,18 +138,19 @@ def webhook():
 
                     # --- Ignora stickers, audios, etc., pero sin romper el flujo ---
                     if tipo != "text":
-                        print(f"Ignorado mensaje tipo '{tipo}' de {from_number}")
+                        logging.info(f"Ignorado mensaje tipo '{tipo}' de {from_number}")
                         enviar_respuesta(from_number, "Por ahora sólo puedo responder a mensajes de texto.")
                         continue
 
                     user_text = message["text"]["body"].strip()
+                    logging.info(f"Mensaje recibido de {from_number}: {user_text}")
 
                     # Consultar scrapper
                     try:
                         resp = requests.get(SCRAPER_URL, timeout=10)
                         pasos_data = resp.json() if resp.status_code == 200 else []
                     except Exception as e:
-                        print(f"Error al consultar scrapper: {e}.")
+                        logging.info(f"Error al consultar scrapper: {e}.")
                         pasos_data = []
 
                     # Generar respuesta según lógica
@@ -156,7 +162,7 @@ def webhook():
         return "EVENT_RECEIVED", 200
 
     except Exception as e:
-        print(f"Error general en webhook: {e}.")
+        logging.info(f"Error general en webhook: {e}.")
         return "EVENT_ERROR", 200
 
 
