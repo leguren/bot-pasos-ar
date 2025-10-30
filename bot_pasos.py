@@ -72,50 +72,72 @@ def verify():
         return challenge
     return "Error de verificación", 403
 
+
+# --- FUNCIÓN AUXILIAR PARA ENVIAR RESPUESTAS ---
+def enviar_respuesta(numero, texto):
+    url = f"https://graph.facebook.com/v20.0/{PHONE_ID}/messages"
+    headers = {
+        "Authorization": f"Bearer {WHATSAPP_TOKEN}",
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": numero,
+        "type": "text",
+        "text": {"body": texto}
+    }
+    try:
+        requests.post(url, headers=headers, json=payload, timeout=10)
+    except Exception as e:
+        print(f"Error al enviar mensaje: {e}")
+
+
 # --- RECEPCIÓN DE MENSAJES ---
 @app.route("/webhook", methods=["POST"])
 def webhook():
     data = request.get_json()
-    if data and "entry" in data:
+
+    try:
+        if not data or "entry" not in data:
+            return "EVENT_IGNORED", 200
+
         for entry in data["entry"]:
             for change in entry.get("changes", []):
                 value = change.get("value", {})
                 messages = value.get("messages", [])
-                for message in messages:
-                    if "text" not in message:
-                        continue  # Ignora stickers, imágenes, etc.
-                    from_number = message["from"]
-                    user_text = message["text"]["body"].strip()
 
+                for message in messages:
+                    tipo = message.get("type", "")
+                    from_number = message.get("from")
+
+                    # --- Ignora stickers, audios, etc., pero sin romper el flujo ---
+                    if tipo != "text":
+                        print(f"Ignorado mensaje tipo '{tipo}' de {from_number}")
+                        enviar_respuesta(from_number, "Por ahora solo puedo responder a mensajes de texto 😊")
+                        continue
+
+                    user_text = message["text"]["body"].strip()
 
                     # Consultar scrapper
                     try:
                         resp = requests.get(SCRAPER_URL, timeout=10)
-                        pasos_data = resp.json()  # lista de diccionarios
-                    except Exception:
+                        pasos_data = resp.json() if resp.status_code == 200 else []
+                    except Exception as e:
+                        print(f"Error al consultar scrapper: {e}")
                         pasos_data = []
 
                     # Generar respuesta según lógica
                     resultado = procesar_mensaje(user_text, pasos_data)
 
-                    # Enviar respuesta a WhatsApp Cloud API
-                    url = f"https://graph.facebook.com/v20.0/{PHONE_ID}/messages"
-                    headers = {
-                        "Authorization": f"Bearer {WHATSAPP_TOKEN}",
-                        "Content-Type": "application/json"
-                    }
-                    payload = {
-                        "messaging_product": "whatsapp",
-                        "to": from_number,
-                        "type": "text",
-                        "text": {"body": resultado}
-                    }
-                    try:
-                        requests.post(url, headers=headers, json=payload, timeout=10)
-                    except Exception:
-                        pass  # opcional: loggear error
+                    # Enviar respuesta
+                    enviar_respuesta(from_number, resultado)
 
-    return "EVENT_RECEIVED", 200
+        return "EVENT_RECEIVED", 200
+
+    except Exception as e:
+        print(f"Error general en webhook: {e}")
+        return "EVENT_ERROR", 200
+
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8080)
