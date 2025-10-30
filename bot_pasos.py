@@ -20,7 +20,7 @@ def procesar_mensaje(user_text, pasos_data):
         pasos_filtrados = [p for p in pasos_data if p.get("estado", "").lower() == estado_req.lower()]
         if not pasos_filtrados:
             return f"No hay pasos {estado_req}s."
-        msg = f"*Pasos internacionales {estado_req.lower()}s:*\n"
+        msg = f"*Pasos internacionales {estado_req.lower()}s*\n"
         for p in pasos_filtrados:
             icono = "🟢" if estado_req == "Abierto" else "🔴"
             msg += f"{icono} *{p.get('nombre','')}*\n"
@@ -133,3 +133,4 @@ async def webhook(request: Request):
                     await enviar_respuesta(from_number, resultado)
 
     return {"status": "ok"}
+
