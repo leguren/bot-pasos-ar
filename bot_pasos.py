@@ -83,15 +83,28 @@ def procesar_mensaje(user_text, pasos_data):
 MAX_LEN = 4000  # límite de caracteres por mensaje
 
 def dividir_mensaje(msg):
+    pasos = msg.split("\n*Paso internacional ")  # separa cada paso
     partes = []
-    while len(msg) > MAX_LEN:
-        split_pos = msg.rfind("\n\n", 0, MAX_LEN)  # intenta dividir por saltos de línea dobles
-        if split_pos == -1:
-            split_pos = MAX_LEN  # si no hay salto, corta en el máximo
-        partes.append(msg[:split_pos].strip())
-        msg = msg[split_pos:].strip()
-    if msg:
-        partes.append(msg)
+    buffer = ""
+
+    for i, paso in enumerate(pasos):
+        # rearmamos el paso completo (solo agregar *Paso internacional al inicio si no es el primero)
+        if i != 0:
+            paso = "*Paso internacional " + paso
+
+        # si agregar este paso supera el límite, guardamos el buffer actual y empezamos uno nuevo
+        if len(buffer) + len(paso) + 2 > MAX_LEN:
+            partes.append(buffer.strip())
+            buffer = paso
+        else:
+            if buffer:
+                buffer += "\n\n" + paso
+            else:
+                buffer = paso
+
+    if buffer:
+        partes.append(buffer.strip())
+
     return partes
 
 # --- FUNCIONES ASINCRÓNICAS ---
@@ -162,6 +175,7 @@ async def webhook(request: Request, background_tasks: BackgroundTasks):
                     background_tasks.add_task(procesar_y_responder, from_number, user_text)
 
     return {"status": "ok"}
+
 
 
 
