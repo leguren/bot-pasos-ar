@@ -92,14 +92,14 @@ async def enviar_respuesta(to_number, mensaje):
         "type": "text",
         "text": {"body": mensaje}
     }
-    async with httpx.AsyncClient(timeout=10) as client:
+    async with httpx.AsyncClient(timeout=20) as client:
         try:
             await client.post(url, headers=headers, json=payload)
         except Exception as e:
             print(f"No se pudo enviar mensaje a {to_number}: {e}")
 
 async def obtener_pasos():
-    async with httpx.AsyncClient(timeout=10) as client:
+    async with httpx.AsyncClient(timeout=20) as client:
         try:
             resp = await client.get(SCRAPER_URL)
             return resp.json()
@@ -139,5 +139,6 @@ async def webhook(request: Request):
                     await enviar_respuesta(from_number, resultado)
 
     return {"status": "ok"}
+
 
 
