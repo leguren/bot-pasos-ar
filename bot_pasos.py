@@ -124,7 +124,8 @@ async def obtener_pasos():
 async def procesar_y_responder(from_number, user_text):
     pasos_data = await obtener_pasos()
     resultado = procesar_mensaje(user_text, pasos_data)
-    await enviar_respuesta(from_number, resultado)
+    for parte in dividir_mensaje(resultado):
+        await enviar_respuesta(from_number, parte)
 
 # --- WEBHOOK DE VERIFICACIÓN ---
 @app.get("/webhook")
@@ -161,5 +162,6 @@ async def webhook(request: Request, background_tasks: BackgroundTasks):
                     background_tasks.add_task(procesar_y_responder, from_number, user_text)
 
     return {"status": "ok"}
+
 
 
