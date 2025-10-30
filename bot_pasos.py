@@ -46,7 +46,7 @@ def procesar_mensaje(user_text, pasos_data):
             msg += (f"*Paso internacional {p.get('nombre','')}*\n"
                     f"{p.get('localidades','')}\n"
                     f"{p.get('estado','')} {icono}\n"
-                    f"{p.get('ultima_actualizacion','')}\n")
+                    f"{p.get('ultima_actualizacion','')}\n\n")
         return msg.strip()
 
     # --- 3) Buscar por provincia ---
@@ -139,6 +139,7 @@ async def webhook(request: Request):
                     await enviar_respuesta(from_number, resultado)
 
     return {"status": "ok"}
+
 
 
 
