@@ -14,23 +14,13 @@ SCRAPER_URL = "https://scraper-pasos-ar-184988071501.southamerica-east1.run.app/
 def procesar_mensaje(user_text, pasos_data):
     texto = user_text.strip().lower()
     
-    # --- CASOS DE DESAMBIGUACIÓN FIJOS ---
-    if "uruguay" in texto:
-        return ("¿Te referís a *Uruguay* (país) o al paso internacional "
-                "*Paso de los Libres (AR) - Uruguayana (BR)*?")
-
-    if "mision" in texto:
-        return ("¿Te referís a *Misiones* (provincia) o a los pasos "
-                "*Misión La Paz (AR) - Pozo Hondo (PY)* o "
-                "*Paso Lamadrid (AR) - Misión San Leonardo (PY)*?")    
-
     # --- 1) Buscar por estado ---
     if "abierto" in texto or "cerrado" in texto:
         estado_req = "Abierto" if "abierto" in texto else "Cerrado"
         pasos_filtrados = [p for p in pasos_data if p.get("estado", "").lower() == estado_req.lower()]
         if not pasos_filtrados:
             return f"No hay pasos {estado_req}s."
-        msg = f"*Pasos {estado_req.lower()}s:*\n"
+        msg = f"*Pasos internacionales {estado_req.lower()}s:*\n"
         for p in pasos_filtrados:
             icono = "🟢" if estado_req == "Abierto" else "🔴"
             msg += f"{icono} *{p.get('nombre','')}*\n"
@@ -43,22 +33,22 @@ def procesar_mensaje(user_text, pasos_data):
         for p in pasos_nombre:
             estado = p.get("estado", "").lower()
             icono = "🟢" if "abierto" in estado else "🔴" if "cerrado" in estado else "⚪"
-            msg += (f"{icono} *Paso internacional {p.get('nombre','')}*\n"
+            msg += (f"*Paso internacional {p.get('nombre','')}*\n"
                     f"{p.get('localidades','')}\n"
-                    f"{p.get('estado','')}\n"
+                    f"{p.get('estado','')} {icono}\n"
                     f"{p.get('ultima_actualizacion','')}\n")
         return msg.strip()
 
     # --- 3) Buscar por provincia (parcial) ---
     pasos_prov = [p for p in pasos_data if texto in p.get("provincia", "").lower()]
     if pasos_prov:
-        msg = f"*Estado de los pasos de la provincia {pasos_prov[0].get('provincia','')}:*\n"
+        msg = f"*Pasos internacionales en {pasos_prov[0].get('provincia','')}:*\n"
         for p in pasos_prov:
             estado = p.get("estado", "").lower()
             icono = "🟢" if "abierto" in estado else "🔴" if "cerrado" in estado else "⚪"
-            msg += (f"\n{icono} *Paso internacional {p.get('nombre','')}*\n"
+            msg += (f"\n*Paso internacional {p.get('nombre','')}*\n"
                     f"{p.get('localidades','')}\n"
-                    f"{p.get('estado','')}\n"
+                    f"{p.get('estado','')} {icono}\n"
                     f"{p.get('ultima_actualizacion','')}\n")
         return msg.strip()
 
@@ -69,19 +59,19 @@ def procesar_mensaje(user_text, pasos_data):
         pais = pais_coincide[0]
         pasos_pais = [p for p in pasos_data if pais in p.get("pais", "").lower()]
         if pasos_pais:
-            msg = f"*Estado de los pasos con {pais.capitalize()}:*\n"
+            msg = f"*Pasos internacionales con {pais.capitalize()}:*\n"
             for paso in pasos_pais:
                 estado = paso.get("estado", "").lower()
                 icono = "🟢" if "abierto" in estado else "🔴" if "cerrado" in estado else "⚪"
-                msg += (f"\n{icono} *Paso internacional {paso.get('nombre','')}*\n"
+                msg += (f"\n*Paso internacional {paso.get('nombre','')}*\n"
                         f"{paso.get('localidades','')}\n"
-                        f"{paso.get('estado','')}\n"
+                        f"{paso.get('estado','')} {icono}\n"
                         f"{paso.get('ultima_actualizacion','')}\n")
             return msg.strip()
 
     # --- 5) Mensaje de bienvenida si no se encontró nada ---
     return ("Consultá el estado de los pasos internacionales de Argentina en tiempo real.\n"
-            "Ingresá el nombre del paso, la provincia en la que se encuentra o el país limítrofe con el que conecta.")
+            "Ingresá el nombre del paso, la provincia en la que se encuentra o el país limítrofe con el que conecta 👉​")
 
 # --- WEBHOOK DE VERIFICACIÓN ---
 @app.route("/webhook", methods=["GET"])
@@ -117,7 +107,7 @@ def webhook():
                     user_text = message["text"]["body"].strip()
                     
 
-                    # Consultar scrapper
+                    # Consultar scraper
                     try:
                         resp = requests.get(SCRAPER_URL, timeout=10)
                         pasos_data = resp.json()  # lista de diccionarios
@@ -148,3 +138,4 @@ def webhook():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8080)
+
