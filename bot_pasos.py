@@ -13,7 +13,7 @@ SCRAPER_URL = "https://scraper-pasos-ar-184988071501.southamerica-east1.run.app/
 # --- FUNCIONES DE LOGICA ---
 def procesar_mensaje(user_text, pasos_data):
     texto = user_text.strip().lower()
-
+    
     # --- CASOS DE DESAMBIGUACIÓN FIJOS ---
     if "uruguay" in texto:
         return ("¿Te referís a *Uruguay* (país) o al paso internacional "
@@ -22,7 +22,7 @@ def procesar_mensaje(user_text, pasos_data):
     if "mision" in texto:
         return ("¿Te referís a *Misiones* (provincia) o a los pasos "
                 "*Misión La Paz (AR) - Pozo Hondo (PY)* o "
-                "*Paso Lamadrid (AR) - Misión San Leonardo (PY)*?")
+                "*Paso Lamadrid (AR) - Misión San Leonardo (PY)*?")    
 
     # --- 1) Buscar por estado ---
     if "abierto" in texto or "cerrado" in texto:
@@ -93,43 +93,20 @@ def verify():
         return challenge
     return "Error de verificación", 403
 
-
-# --- FUNCIÓN AUXILIAR PARA ENVIAR RESPUESTAS ---
-def enviar_respuesta(numero, texto):
-    url = f"https://graph.facebook.com/v20.0/{PHONE_ID}/messages"
-    headers = {
-        "Authorization": f"Bearer {WHATSAPP_TOKEN}",
-        "Content-Type": "application/json"
-    }
-    payload = {
-        "messaging_product": "whatsapp",
-        "to": numero,
-        "type": "text",
-        "text": {"body": texto}
-    }
-    try:
-        requests.post(url, headers=headers, json=payload, timeout=10)
-    except Exception as e:
-        print(f"Error al enviar mensaje: {e}.")
-
-
 # --- RECEPCIÓN DE MENSAJES ---
 @app.route("/webhook", methods=["POST"])
 def webhook():
     data = request.get_json()
-
-    try:
-        if not data or "entry" not in data:
-            return "EVENT_IGNORED", 200
-
+    if data and "entry" in data:
         for entry in data["entry"]:
             for change in entry.get("changes", []):
                 value = change.get("value", {})
                 messages = value.get("messages", [])
-
+                
                 for message in messages:
                     tipo = message.get("type", "")
                     from_number = message.get("from")
+
 
                     # --- Ignora stickers, audios, etc., pero sin romper el flujo ---
                     if tipo != "text":
@@ -138,13 +115,13 @@ def webhook():
                         continue
 
                     user_text = message["text"]["body"].strip()
+                    
 
                     # Consultar scrapper
                     try:
                         resp = requests.get(SCRAPER_URL, timeout=10)
-                        pasos_data = resp.json() if resp.status_code == 200 else []
-                    except Exception as e:
-                        print(f"Error al consultar scrapper: {e}.")
+                        pasos_data = resp.json()  # lista de diccionarios
+                    except Exception:
                         pasos_data = []
 
                     # Generar respuesta según lógica
@@ -152,23 +129,20 @@ def webhook():
 
                     # Enviar respuesta a WhatsApp Cloud API
                     url = f"https://graph.facebook.com/v20.0/{PHONE_ID}/messages"
-
                     headers = {
                         "Authorization": f"Bearer {WHATSAPP_TOKEN}",
                         "Content-Type": "application/json"
-                        }
+                    }
                     payload = {
                         "messaging_product": "whatsapp",
                         "to": from_number,
                         "type": "text",
                         "text": {"body": resultado}
-                        }
+                    }
                     try:
                         requests.post(url, headers=headers, json=payload, timeout=10)
-                        logging.info(f"Respuesta enviada a {numero}: {texto[:50]}…")
                     except Exception:
                         pass  # opcional: loggear error
-                        logging.error(f"Error al enviar mensaje a {numero}: {e}")
 
     return "EVENT_RECEIVED", 200
 
