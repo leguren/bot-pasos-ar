@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, BackgroundTasks
 import httpx
 import os
 import unicodedata
@@ -106,6 +106,11 @@ async def obtener_pasos():
         except Exception:
             return []
 
+async def procesar_y_responder(from_number, user_text):
+    pasos_data = await obtener_pasos()
+    resultado = procesar_mensaje(user_text, pasos_data)
+    await enviar_respuesta(from_number, resultado)
+
 # --- WEBHOOK DE VERIFICACIÓN ---
 @app.get("/webhook")
 async def verify(mode: str = None, hub_verify_token: str = None, hub_challenge: str = None):
@@ -115,7 +120,7 @@ async def verify(mode: str = None, hub_verify_token: str = None, hub_challenge: 
 
 # --- RECEPCIÓN DE MENSAJES ---
 @app.post("/webhook")
-async def webhook(request: Request):
+async def webhook(request: Request, background_tasks: BackgroundTasks):
     data = await request.json()
     if data and "entry" in data:
         for entry in data["entry"]:
@@ -133,15 +138,11 @@ async def webhook(request: Request):
                         continue
 
                     user_text = message["text"]["body"].strip()
-                    pasos_data = await obtener_pasos()
 
-                    resultado = procesar_mensaje(user_text, pasos_data)
-                    await enviar_respuesta(from_number, resultado)
+                    # 1️⃣ Respuesta inmediata (menos de 10 segundos)
+                    await enviar_respuesta(from_number, "Procesando tu solicitud... ⏳")
+
+                    # 2️⃣ Procesamiento en segundo plano
+                    background_tasks.add_task(procesar_y_responder, from_number, user_text)
 
     return {"status": "ok"}
-
-
-
-
-
-
