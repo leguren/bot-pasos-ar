@@ -105,6 +105,67 @@ def dividir_mensaje(msg):
 
     return partes
 
+# --- NUEVAS FUNCIONES DE BOTONES ---
+async def enviar_bienvenida_con_botones(to_number):
+    url = f"https://graph.facebook.com/v20.0/{PHONE_ID}/messages"
+    headers = {
+        "Authorization": f"Bearer {WHATSAPP_TOKEN}",
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": to_number,
+        "type": "interactive",
+        "interactive": {
+            "type": "button",
+            "body": {"text": "Consultá el estado de los pasos internacionales de Argentina en tiempo real. Elegí una opción:"},
+            "action": {
+                "buttons": [
+                    {"type": "reply", "reply": {"id": "ver_todos", "title": "Ver todos los pasos"}},
+                    {"type": "reply", "reply": {"id": "ver_abiertos", "title": "Ver solo los abiertos"}},
+                    {"type": "reply", "reply": {"id": "ver_cerrados", "title": "Ver solo los cerrados"}},
+                    {"type": "reply", "reply": {"id": "buscar_pais", "title": "Buscar por país"}}
+                ]
+            }
+        }
+    }
+    async with httpx.AsyncClient(timeout=20) as client:
+        try:
+            await client.post(url, headers=headers, json=payload)
+        except Exception as e:
+            print(f"No se pudo enviar mensaje a {to_number}: {e}")
+
+
+async def enviar_botones_paises(to_number):
+    url = f"https://graph.facebook.com/v20.0/{PHONE_ID}/messages"
+    headers = {
+        "Authorization": f"Bearer {WHATSAPP_TOKEN}",
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": to_number,
+        "type": "interactive",
+        "interactive": {
+            "type": "button",
+            "body": {"text": "Elegí un país para ver los pasos internacionales:"},
+            "action": {
+                "buttons": [
+                    {"type": "reply", "reply": {"id": "pais_bolivia", "title": "Bolivia"}},
+                    {"type": "reply", "reply": {"id": "pais_brasil", "title": "Brasil"}},
+                    {"type": "reply", "reply": {"id": "pais_chile", "title": "Chile"}},
+                    {"type": "reply", "reply": {"id": "pais_paraguay", "title": "Paraguay"}},
+                    {"type": "reply", "reply": {"id": "pais_uruguay", "title": "Uruguay"}}
+                ]
+            }
+        }
+    }
+    async with httpx.AsyncClient(timeout=20) as client:
+        try:
+            await client.post(url, headers=headers, json=payload)
+        except Exception as e:
+            print(f"No se pudo enviar mensaje a {to_number}: {e}")
+
 # --- FUNCIONES ASINCRÓNICAS ---
 async def enviar_respuesta(to_number, mensaje):
     url = f"https://graph.facebook.com/v20.0/{PHONE_ID}/messages"
@@ -135,6 +196,13 @@ async def obtener_pasos():
 async def procesar_y_responder(from_number, user_text):
     pasos_data = await obtener_pasos()
     resultado = procesar_mensaje(user_text, pasos_data)
+
+    # si el resultado es el mensaje de bienvenida, enviamos botones
+    if "Consultá el estado de los pasos internacionales" in resultado:
+        await enviar_bienvenida_con_botones(from_number)
+        return
+
+    # dividimos y enviamos normalmente
     for parte in dividir_mensaje(resultado):
         await enviar_respuesta(from_number, parte)
 
@@ -145,7 +213,7 @@ async def verify(mode: str = None, hub_verify_token: str = None, hub_challenge: 
         return hub_challenge
     return "Error de verificación", 403
 
-# --- RECEPCIÓN DE MENSAJES ---
+# --- RECEPCIÓN DE MENSAJES CORREGIDA ---
 @app.post("/webhook")
 async def webhook(request: Request, background_tasks: BackgroundTasks):
     data = await request.json()
@@ -159,23 +227,42 @@ async def webhook(request: Request, background_tasks: BackgroundTasks):
                     tipo = message.get("type", "")
                     from_number = message.get("from")
 
-                    if tipo != "text":
-                        print(f"Ignorado mensaje tipo '{tipo}' de {from_number}")
-                        await enviar_respuesta(from_number, "Por ahora sólo puedo responder a mensajes de texto.")
+                    # --- MENSAJES DE BOTÓN ---
+                    if tipo == "button":
+                        reply_id = message["button"]["payload"]
+                        pasos_data = await obtener_pasos()
+
+                        if reply_id == "ver_todos":
+                            resultado = procesar_mensaje("todos", pasos_data)
+                        elif reply_id == "ver_abiertos":
+                            resultado = procesar_mensaje("abierto", pasos_data)
+                        elif reply_id == "ver_cerrados":
+                            resultado = procesar_mensaje("cerrado", pasos_data)
+                        elif reply_id == "buscar_pais":
+                            await enviar_botones_paises(from_number)
+                            continue  # salta al siguiente mensaje
+                        elif reply_id.startswith("pais_"):
+                            pais = reply_id.split("_")[1].capitalize()
+                            resultado = procesar_mensaje(pais, pasos_data)
+                        else:
+                            continue  # si el payload no coincide, ignorar
+
+                        # enviar resultado dividido en partes
+                        for parte in dividir_mensaje(resultado):
+                            await enviar_respuesta(from_number, parte)
+                        continue  # salta al siguiente mensaje
+
+                    # --- MENSAJES DE TEXTO ---
+                    if tipo == "text":
+                        user_text = message["text"]["body"].strip()
+                        # respuesta inmediata
+                        await enviar_respuesta(from_number, "Procesando tu solicitud... ⏳")
+                        # procesamiento en segundo plano
+                        background_tasks.add_task(procesar_y_responder, from_number, user_text)
                         continue
 
-                    user_text = message["text"]["body"].strip()
-
-                    # 1️⃣ Respuesta inmediata (menos de 10 segundos)
-                    await enviar_respuesta(from_number, "Procesando tu solicitud... ⏳")
-
-                    # 2️⃣ Procesamiento en segundo plano
-                    background_tasks.add_task(procesar_y_responder, from_number, user_text)
+                    # --- MENSAJES QUE NO SON TEXTO NI BOTONES ---
+                    print(f"Ignorado mensaje tipo '{tipo}' de {from_number}")
+                    await enviar_respuesta(from_number, "Por ahora sólo puedo responder a mensajes de texto o botones.")
 
     return {"status": "ok"}
-
-
-
-
-
-
