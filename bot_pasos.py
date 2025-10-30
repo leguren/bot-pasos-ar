@@ -79,6 +79,21 @@ def procesar_mensaje(user_text, pasos_data):
     return ("Consultá el estado de los pasos internacionales de Argentina en tiempo real.\n"
             "Ingresá el nombre del paso, la provincia en la que se encuentra o el país con el que conecta. 👉​")
 
+# --- LÍMITE DE CARACTERES ---
+MAX_LEN = 4000  # límite de caracteres por mensaje
+
+def dividir_mensaje(msg):
+    partes = []
+    while len(msg) > MAX_LEN:
+        split_pos = msg.rfind("\n\n", 0, MAX_LEN)  # intenta dividir por saltos de línea dobles
+        if split_pos == -1:
+            split_pos = MAX_LEN  # si no hay salto, corta en el máximo
+        partes.append(msg[:split_pos].strip())
+        msg = msg[split_pos:].strip()
+    if msg:
+        partes.append(msg)
+    return partes
+
 # --- FUNCIONES ASINCRÓNICAS ---
 async def enviar_respuesta(to_number, mensaje):
     url = f"https://graph.facebook.com/v20.0/{PHONE_ID}/messages"
@@ -146,4 +161,5 @@ async def webhook(request: Request, background_tasks: BackgroundTasks):
                     background_tasks.add_task(procesar_y_responder, from_number, user_text)
 
     return {"status": "ok"}
+
 
