@@ -33,7 +33,7 @@ def procesar_mensaje(user_text, pasos_data):
         msg = f"*Pasos internacionales {estado_req.lower()}s*\n\n"
         for p in pasos_filtrados:
             icono = "🟢" if estado_req == "Abierto" else "🔴"
-            msg += f"{icono} {p.get('nombre','')}\n"
+            msg += f"{p.get('nombre','')}\n"
         return msg.strip()
 
     # --- 2) Buscar por nombre de paso ---
@@ -139,6 +139,7 @@ async def webhook(request: Request):
                     await enviar_respuesta(from_number, resultado)
 
     return {"status": "ok"}
+
 
 
 
