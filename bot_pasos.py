@@ -227,30 +227,33 @@ async def webhook(request: Request, background_tasks: BackgroundTasks):
                     tipo = message.get("type", "")
                     from_number = message.get("from")
 
-                    # --- MENSAJES DE BOTÓN ---
-                    if tipo == "button":
-                        reply_id = message["button"]["payload"]
-                        pasos_data = await obtener_pasos()
+                    # --- MENSAJES DE BOTÓN CORREGIDOS ---
+                    if tipo == "interactive":
+                        interactive_type = message["interactive"]["type"]
 
-                        if reply_id == "ver_todos":
-                            resultado = procesar_mensaje("todos", pasos_data)
-                        elif reply_id == "ver_abiertos":
-                            resultado = procesar_mensaje("abierto", pasos_data)
-                        elif reply_id == "ver_cerrados":
-                            resultado = procesar_mensaje("cerrado", pasos_data)
-                        elif reply_id == "buscar_pais":
-                            await enviar_botones_paises(from_number)
+                        if interactive_type == "button_reply":
+                            reply_id = message["interactive"]["button_reply"]["id"]
+                            pasos_data = await obtener_pasos()
+
+                            if reply_id == "ver_todos":
+                                resultado = procesar_mensaje("todos", pasos_data)
+                            elif reply_id == "ver_abiertos":
+                                resultado = procesar_mensaje("abierto", pasos_data)
+                            elif reply_id == "ver_cerrados":
+                                resultado = procesar_mensaje("cerrado", pasos_data)
+                            elif reply_id == "buscar_pais":
+                                await enviar_botones_paises(from_number)
+                                continue  # salta al siguiente mensaje
+                            elif reply_id.startswith("pais_"):
+                                pais = reply_id.split("_")[1].capitalize()
+                                resultado = procesar_mensaje(pais, pasos_data)
+                            else:
+                                continue  # payload desconocido
+
+                            # enviar resultado dividido en partes
+                            for parte in dividir_mensaje(resultado):
+                                await enviar_respuesta(from_number, parte)
                             continue  # salta al siguiente mensaje
-                        elif reply_id.startswith("pais_"):
-                            pais = reply_id.split("_")[1].capitalize()
-                            resultado = procesar_mensaje(pais, pasos_data)
-                        else:
-                            continue  # si el payload no coincide, ignorar
-
-                        # enviar resultado dividido en partes
-                        for parte in dividir_mensaje(resultado):
-                            await enviar_respuesta(from_number, parte)
-                        continue  # salta al siguiente mensaje
 
                     # --- MENSAJES DE TEXTO ---
                     if tipo == "text":
