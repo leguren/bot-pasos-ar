@@ -1,8 +1,8 @@
-from flask import Flask, request
-import requests
+from fastapi import FastAPI, Request
+import httpx
 import os
 
-app = Flask(__name__)
+app = FastAPI()
 
 # --- CONFIGURACIÓN ---
 VERIFY_TOKEN = os.environ.get("VERIFY_TOKEN", "a8F3kPzR9wY2qLbH5tJv6mX1sC4nD0eQ")
@@ -73,69 +73,63 @@ def procesar_mensaje(user_text, pasos_data):
     return ("Consultá el estado de los pasos internacionales de Argentina en tiempo real.\n"
             "Ingresá el nombre del paso, la provincia en la que se encuentra o el país limítrofe con el que conecta 👉​")
 
+# --- FUNCIONES ASINCRÓNICAS ---
+async def enviar_respuesta(to_number, mensaje):
+    url = f"https://graph.facebook.com/v20.0/{PHONE_ID}/messages"
+    headers = {
+        "Authorization": f"Bearer {WHATSAPP_TOKEN}",
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": to_number,
+        "type": "text",
+        "text": {"body": mensaje}
+    }
+    async with httpx.AsyncClient(timeout=10) as client:
+        try:
+            await client.post(url, headers=headers, json=payload)
+        except Exception as e:
+            print(f"No se pudo enviar mensaje a {to_number}: {e}")
+
+async def obtener_pasos():
+    async with httpx.AsyncClient(timeout=10) as client:
+        try:
+            resp = await client.get(SCRAPER_URL)
+            return resp.json()
+        except Exception:
+            return []
+
 # --- WEBHOOK DE VERIFICACIÓN ---
-@app.route("/webhook", methods=["GET"])
-def verify():
-    mode = request.args.get("hub.mode")
-    token = request.args.get("hub.verify_token")
-    challenge = request.args.get("hub.challenge")
-    if mode == "subscribe" and token == VERIFY_TOKEN:
-        return challenge
+@app.get("/webhook")
+async def verify(mode: str = None, hub_verify_token: str = None, hub_challenge: str = None):
+    if mode == "subscribe" and hub_verify_token == VERIFY_TOKEN:
+        return hub_challenge
     return "Error de verificación", 403
 
 # --- RECEPCIÓN DE MENSAJES ---
-@app.route("/webhook", methods=["POST"])
-def webhook():
-    data = request.get_json()
+@app.post("/webhook")
+async def webhook(request: Request):
+    data = await request.json()
     if data and "entry" in data:
         for entry in data["entry"]:
             for change in entry.get("changes", []):
                 value = change.get("value", {})
                 messages = value.get("messages", [])
-                
+
                 for message in messages:
                     tipo = message.get("type", "")
                     from_number = message.get("from")
 
-
-                    # --- Ignora stickers, audios, etc., pero sin romper el flujo ---
                     if tipo != "text":
                         print(f"Ignorado mensaje tipo '{tipo}' de {from_number}")
-                        enviar_respuesta(from_number, "Por ahora sólo puedo responder a mensajes de texto.")
+                        await enviar_respuesta(from_number, "Por ahora sólo puedo responder a mensajes de texto.")
                         continue
 
                     user_text = message["text"]["body"].strip()
-                    
+                    pasos_data = await obtener_pasos()
 
-                    # Consultar scraper
-                    try:
-                        resp = requests.get(SCRAPER_URL, timeout=10)
-                        pasos_data = resp.json()  # lista de diccionarios
-                    except Exception:
-                        pasos_data = []
-
-                    # Generar respuesta según lógica
                     resultado = procesar_mensaje(user_text, pasos_data)
+                    await enviar_respuesta(from_number, resultado)
 
-                    # Enviar respuesta a WhatsApp Cloud API
-                    url = f"https://graph.facebook.com/v20.0/{PHONE_ID}/messages"
-                    headers = {
-                        "Authorization": f"Bearer {WHATSAPP_TOKEN}",
-                        "Content-Type": "application/json"
-                    }
-                    payload = {
-                        "messaging_product": "whatsapp",
-                        "to": from_number,
-                        "type": "text",
-                        "text": {"body": resultado}
-                    }
-                    try:
-                        requests.post(url, headers=headers, json=payload, timeout=10)
-                    except Exception:
-                        pass  # opcional: loggear error
-
-    return "EVENT_RECEIVED", 200
-
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=8080)
-
+    return {"status": "ok"}
