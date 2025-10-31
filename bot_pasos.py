@@ -74,7 +74,6 @@ def procesar_mensaje(user_text, pasos_data):
         msg += (f"*Paso internacional {p.get('nombre','')}*\n"
                 f"{p.get('localidades','')}\n"
                 f"{p.get('estado','')} {icono}\n"
-                f"{p.get('provincia','')} - {p.get('pais','')}\n"
                 f"{p.get('ultima_actualizacion','')}\n\n")
 
     # --- Resultados por provincia ---
@@ -85,7 +84,6 @@ def procesar_mensaje(user_text, pasos_data):
             msg += (f"*Paso internacional {p.get('nombre','')}*\n"
                     f"{p.get('localidades','')}\n"
                     f"{p.get('estado','')} {icono}\n"
-                    f"{p.get('provincia','')} - {p.get('pais','')}\n"
                     f"{p.get('ultima_actualizacion','')}\n\n")
 
     # --- Resultados por país ---
@@ -96,7 +94,6 @@ def procesar_mensaje(user_text, pasos_data):
             msg += (f"*Paso internacional {p.get('nombre','')}*\n"
                     f"{p.get('localidades','')}\n"
                     f"{p.get('estado','')} {icono}\n"
-                    f"{p.get('provincia','')} - {p.get('pais','')}\n"
                     f"{p.get('ultima_actualizacion','')}\n\n")
 
     # --- Resultados por estado ---
@@ -106,8 +103,6 @@ def procesar_mensaje(user_text, pasos_data):
             icono = emoji_estado(p.get("estado",""))
             msg += (f"*Paso internacional {p.get('nombre','')}*\n"
                     f"{p.get('localidades','')}\n"
-                    f"{p.get('estado','')} {icono}\n"
-                    f"{p.get('provincia','')} - {p.get('pais','')}\n"
                     f"{p.get('ultima_actualizacion','')}\n\n")
 
     if not msg:
@@ -189,4 +184,5 @@ async def webhook(request: Request, background_tasks: BackgroundTasks):
                     background_tasks.add_task(procesar_y_responder, from_number, user_text)
 
     return {"status": "ok"}
+
 
