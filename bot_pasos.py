@@ -3,6 +3,7 @@ from fastapi import FastAPI, Request, BackgroundTasks
 import httpx
 import os
 import unicodedata
+import logging
 
 app = FastAPI()
 
@@ -10,6 +11,11 @@ VERIFY_TOKEN = os.environ.get("VERIFY_TOKEN", "a8F3kPzR9wY2qLbH5tJv6mX1sC4nD0eQ"
 WHATSAPP_TOKEN = os.environ.get("WHATSAPP_TOKEN")
 PHONE_ID = os.environ.get("PHONE_ID")
 SCRAPER_URL = "https://scraper-pasos-ar-184988071501.southamerica-east1.run.app/scrapear"
+
+logging.basicConfig(
+    level=logging.INFO,  # Para registrar todos los mensajes entrantes
+    format="%(asctime)s [%(levelname)s] %(message)s"
+)
 
 # === FUNCIONES DE LÓGICA ===
 def normalizar(texto):
@@ -182,7 +188,6 @@ async def verify(mode: str = None, hub_verify_token: str = None, hub_challenge: 
         return hub_challenge
     return "Error de verificación", 403
 
-# === RECEPCIÓN DE MENSAJES ===
 @app.post("/webhook")
 async def webhook(request: Request, background_tasks: BackgroundTasks):
     data = await request.json()
@@ -196,12 +201,17 @@ async def webhook(request: Request, background_tasks: BackgroundTasks):
                     from_number = message.get("from")
 
                     if tipo != "text":
-                        print(f"Ignorado mensaje tipo '{tipo}' de {from_number}")
-                        await enviar_respuesta(from_number, "👀 Por ahora sólo puedo responder a mensajes de texto.\n"
-                                                            "Probá ingresando nuevamente el nombre del paso, la provincia o el país con el que conecta.")
+                        logging.info("Ignorado mensaje tipo '%s' de %s", tipo, from_number)
+                        await enviar_respuesta(
+                            from_number,
+                            "👀 Por ahora sólo puedo responder a mensajes de texto.\n"
+                            "Probá ingresando nuevamente el nombre del paso, la provincia o el país con el que conecta."
+                        )
                         continue
 
                     user_text = message["text"]["body"].strip()
+                    logging.info("Mensaje recibido de %s: %s", from_number, user_text)  # <--- LOGGING
+
                     texto_norm = normalizar(user_text)
 
                     # 👇 Detectar saludos antes de enviar “Procesando…”
