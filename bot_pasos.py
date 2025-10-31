@@ -74,36 +74,36 @@ def procesar_mensaje(user_text, pasos_data):
         msg += (f"*Paso internacional {p.get('nombre','')}*\n"
                 f"{p.get('localidades','')}\n"
                 f"{p.get('estado','')} {icono}\n"
-                f"{p.get('ultima_actualizacion','')}\n\n")
+                f"{p.get('ultima_actualizacion','')}\n")
 
     # --- Resultados por provincia ---
     for provincia, pasos in resultados_provincia.items():
-        msg += f"*Pasos internacionales en {provincia}*\n\n"
+        msg += f"*Pasos internacionales en {provincia}*\n"
         for p in pasos:
             icono = emoji_estado(p.get("estado",""))
             msg += (f"*Paso internacional {p.get('nombre','')}*\n"
                     f"{p.get('localidades','')}\n"
                     f"{p.get('estado','')} {icono}\n"
-                    f"{p.get('ultima_actualizacion','')}\n\n")
+                    f"{p.get('ultima_actualizacion','')}\n")
 
     # --- Resultados por país ---
     for pais, pasos in resultados_pais.items():
-        msg += f"*Pasos internacionales con {pais}*\n\n"
+        msg += f"*Pasos internacionales con {pais}*\n"
         for p in pasos:
             icono = emoji_estado(p.get("estado",""))
             msg += (f"*Paso internacional {p.get('nombre','')}*\n"
                     f"{p.get('localidades','')}\n"
                     f"{p.get('estado','')} {icono}\n"
-                    f"{p.get('ultima_actualizacion','')}\n\n")
+                    f"{p.get('ultima_actualizacion','')}\n")
 
     # --- Resultados por estado ---
     for estado, pasos in resultados_estado.items():
-        msg += f"*Pasos internacionales {estado}s*\n\n"
+        msg += f"*Pasos internacionales {estado}s*\n"
         for p in pasos:
             icono = emoji_estado(p.get("estado",""))
             msg += (f"*Paso internacional {p.get('nombre','')}*\n"
                     f"{p.get('localidades','')}\n"
-                    f"{p.get('ultima_actualizacion','')}\n\n")
+                    f"{p.get('ultima_actualizacion','')}\n")
 
     if not msg:
         return ("Consultá el estado de los pasos internacionales de Argentina en tiempo real.\n"
@@ -184,5 +184,6 @@ async def webhook(request: Request, background_tasks: BackgroundTasks):
                     background_tasks.add_task(procesar_y_responder, from_number, user_text)
 
     return {"status": "ok"}
+
 
 
