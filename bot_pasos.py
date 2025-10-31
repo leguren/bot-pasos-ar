@@ -7,13 +7,12 @@ app = FastAPI()
 
 # --- CONFIGURACIÓN ---
 VERIFY_TOKEN = os.environ.get("VERIFY_TOKEN", "a8F3kPzR9wY2qLbH5tJv6mX1sC4nD0eQ")
-WHATSAPP_TOKEN = os.environ.get("WHATSAPP_TOKEN")  # token largo del Cloud API
-PHONE_ID = os.environ.get("PHONE_ID")  # id del número de WhatsApp Cloud API
+WHATSAPP_TOKEN = os.environ.get("WHATSAPP_TOKEN")
+PHONE_ID = os.environ.get("PHONE_ID")
 SCRAPER_URL = "https://scraper-pasos-ar-184988071501.southamerica-east1.run.app/scrapear"
 
 # --- FUNCIONES DE LOGICA ---
 def normalizar(texto):
-    """Convierte a minúsculas, quita acentos y espacios extra."""
     if not texto:
         return ""
     texto = texto.strip().lower()
@@ -24,18 +23,22 @@ def normalizar(texto):
 def procesar_mensaje(user_text, pasos_data):
     texto = normalizar(user_text)
 
-    # --- 1) Buscar por estado ---
+    # --- 1) Hola → mensaje de bienvenida ---
+    if texto in ["hola", "hi", "buenas", "buen día", "buenos días"]:
+        return "bienvenida"
+
+    # --- 2) Buscar por estado ---
     if "abierto" in texto or "cerrado" in texto:
         estado_req = "Abierto" if "abierto" in texto else "Cerrado"
         pasos_filtrados = [p for p in pasos_data if normalizar(p.get("estado","")) == normalizar(estado_req)]
         if not pasos_filtrados:
-            return f"No hay pasos {estado_req}s."
+            return "no_encontrado"
         msg = f"*Pasos internacionales {estado_req.lower()}s*\n\n"
         for p in pasos_filtrados:
             msg += f"{p.get('nombre','')}\n"
         return msg.strip()
 
-    # --- 2) Buscar por nombre de paso ---
+    # --- 3) Buscar por nombre de paso ---
     pasos_nombre = [p for p in pasos_data if texto in normalizar(p.get("nombre",""))]
     if pasos_nombre:
         msg = ""
@@ -48,7 +51,7 @@ def procesar_mensaje(user_text, pasos_data):
                     f"{p.get('ultima_actualizacion','')}\n\n")
         return msg.strip()
 
-    # --- 3) Buscar por provincia ---
+    # --- 4) Buscar por provincia ---
     pasos_prov = [p for p in pasos_data if texto in normalizar(p.get("provincia",""))]
     if pasos_prov:
         msg = f"*Pasos internacionales en {pasos_prov[0].get('provincia','')}*\n"
@@ -60,7 +63,7 @@ def procesar_mensaje(user_text, pasos_data):
                     f"{p.get('ultima_actualizacion','')}\n")
         return msg.strip()
 
-    # --- 4) Buscar por país ---
+    # --- 5) Buscar por país ---
     pasos_pais = [p for p in pasos_data if texto in normalizar(p.get("pais",""))]
     if pasos_pais:
         msg = f"*Pasos internacionales con {pasos_pais[0].get('pais','')}*\n"
@@ -72,17 +75,15 @@ def procesar_mensaje(user_text, pasos_data):
                     f"{paso.get('ultima_actualizacion','')}\n")
         return msg.strip()
 
-    # --- 5) Mensaje por defecto (no encontrado) ---
-    return None  # retornamos None para diferenciar "no encontrado"
+    # --- 6) No se encontró nada ---
+    return "no_encontrado"
 
 # --- LÍMITE DE CARACTERES ---
 MAX_LEN = 4000
-
 def dividir_mensaje(msg):
     pasos = msg.split("\n*Paso internacional ")
     partes = []
     buffer = ""
-
     for i, paso in enumerate(pasos):
         if i != 0:
             paso = "*Paso internacional " + paso
@@ -90,14 +91,9 @@ def dividir_mensaje(msg):
             partes.append(buffer.strip())
             buffer = paso
         else:
-            if buffer:
-                buffer += "\n\n" + paso
-            else:
-                buffer = paso
-
+            buffer = (buffer + "\n\n" + paso) if buffer else paso
     if buffer:
         partes.append(buffer.strip())
-
     return partes
 
 # --- FUNCIONES DE BOTONES ---
@@ -110,7 +106,7 @@ async def enviar_bienvenida_con_botones(to_number):
         "type": "interactive",
         "interactive": {
             "type": "button",
-            "body": {"text": "Hola! Acá podés consultar los pasos por nombre, provincia o con los siguientes botones:"},
+            "body": {"text": "Hola 👋! Podés consultar los pasos internacionales por nombre, provincia o usando estos botones:"},
             "action": {
                 "buttons": [
                     {"type": "reply", "reply": {"id": "ver_todos", "title": "Ver todos los pasos"}},
@@ -122,12 +118,9 @@ async def enviar_bienvenida_con_botones(to_number):
         }
     }
     async with httpx.AsyncClient(timeout=20) as client:
-        try:
-            await client.post(url, headers=headers, json=payload)
-        except Exception as e:
-            print(f"No se pudo enviar mensaje a {to_number}: {e}")
+        await client.post(url, headers=headers, json=payload)
 
-async def enviar_no_encontre_con_botones(to_number):
+async def enviar_no_encontrado_con_botones(to_number):
     url = f"https://graph.facebook.com/v20.0/{PHONE_ID}/messages"
     headers = {"Authorization": f"Bearer {WHATSAPP_TOKEN}", "Content-Type": "application/json"}
     payload = {
@@ -136,7 +129,7 @@ async def enviar_no_encontre_con_botones(to_number):
         "type": "interactive",
         "interactive": {
             "type": "button",
-            "body": {"text": "No encontré lo que estás buscando. Intentá nuevamente o probá con los botones:"},
+            "body": {"text": "No encontré lo que estás buscando. Intentá nuevamente o probá con estos botones:"},
             "action": {
                 "buttons": [
                     {"type": "reply", "reply": {"id": "ver_todos", "title": "Ver todos los pasos"}},
@@ -148,48 +141,15 @@ async def enviar_no_encontre_con_botones(to_number):
         }
     }
     async with httpx.AsyncClient(timeout=20) as client:
-        try:
-            await client.post(url, headers=headers, json=payload)
-        except Exception as e:
-            print(f"No se pudo enviar mensaje a {to_number}: {e}")
+        await client.post(url, headers=headers, json=payload)
 
-async def enviar_botones_paises(to_number):
-    url = f"https://graph.facebook.com/v20.0/{PHONE_ID}/messages"
-    headers = {"Authorization": f"Bearer {WHATSAPP_TOKEN}", "Content-Type": "application/json"}
-    payload = {
-        "messaging_product": "whatsapp",
-        "to": to_number,
-        "type": "interactive",
-        "interactive": {
-            "type": "button",
-            "body": {"text": "Elegí un país para ver los pasos internacionales:"},
-            "action": {
-                "buttons": [
-                    {"type": "reply", "reply": {"id": "pais_bolivia", "title": "Bolivia"}},
-                    {"type": "reply", "reply": {"id": "pais_brasil", "title": "Brasil"}},
-                    {"type": "reply", "reply": {"id": "pais_chile", "title": "Chile"}},
-                    {"type": "reply", "reply": {"id": "pais_paraguay", "title": "Paraguay"}},
-                    {"type": "reply", "reply": {"id": "pais_uruguay", "title": "Uruguay"}}
-                ]
-            }
-        }
-    }
-    async with httpx.AsyncClient(timeout=20) as client:
-        try:
-            await client.post(url, headers=headers, json=payload)
-        except Exception as e:
-            print(f"No se pudo enviar mensaje a {to_number}: {e}")
-
-# --- ENVIAR TEXTO SIMPLE ---
+# --- FUNCIONES ASINCRÓNICAS ---
 async def enviar_respuesta(to_number, mensaje):
     url = f"https://graph.facebook.com/v20.0/{PHONE_ID}/messages"
     headers = {"Authorization": f"Bearer {WHATSAPP_TOKEN}", "Content-Type": "application/json"}
     payload = {"messaging_product": "whatsapp", "to": to_number, "type": "text", "text": {"body": mensaje}}
     async with httpx.AsyncClient(timeout=20) as client:
-        try:
-            await client.post(url, headers=headers, json=payload)
-        except Exception as e:
-            print(f"No se pudo enviar mensaje a {to_number}: {e}")
+        await client.post(url, headers=headers, json=payload)
 
 async def obtener_pasos():
     async with httpx.AsyncClient(timeout=20) as client:
@@ -199,36 +159,28 @@ async def obtener_pasos():
         except Exception:
             return []
 
-# --- PROCESAR MENSAJE Y RESPONDER ---
 async def procesar_y_responder(from_number, user_text):
     pasos_data = await obtener_pasos()
-    texto_norm = normalizar(user_text)
-
-    # 1) Bienvenida si dice "hola"
-    if texto_norm == "hola":
-        await enviar_bienvenida_con_botones(from_number)
-        return
-
-    # 2) Procesar mensaje normalmente
     resultado = procesar_mensaje(user_text, pasos_data)
 
-    # 3) Si no encontró nada, enviar "no encontré"
-    if resultado is None:
-        await enviar_no_encontre_con_botones(from_number)
+    if resultado == "bienvenida":
+        await enviar_bienvenida_con_botones(from_number)
+        return
+    elif resultado == "no_encontrado":
+        await enviar_no_encontrado_con_botones(from_number)
         return
 
-    # 4) Enviar resultado dividido
+    # dividimos y enviamos normalmente
     for parte in dividir_mensaje(resultado):
         await enviar_respuesta(from_number, parte)
 
-# --- WEBHOOK DE VERIFICACIÓN ---
+# --- WEBHOOK ---
 @app.get("/webhook")
 async def verify(mode: str = None, hub_verify_token: str = None, hub_challenge: str = None):
     if mode == "subscribe" and hub_verify_token == VERIFY_TOKEN:
         return hub_challenge
     return "Error de verificación", 403
 
-# --- WEBHOOK DE RECEPCIÓN ---
 @app.post("/webhook")
 async def webhook(request: Request, background_tasks: BackgroundTasks):
     data = await request.json()
@@ -242,14 +194,18 @@ async def webhook(request: Request, background_tasks: BackgroundTasks):
                     tipo = message.get("type", "")
                     from_number = message.get("from")
 
-                    # --- BOTONES ---
+                    if tipo == "text":
+                        user_text = message["text"]["body"].strip()
+                        # enviamos "Procesando tu solicitud" primero
+                        await enviar_respuesta(from_number, "Procesando tu solicitud... ⏳")
+                        background_tasks.add_task(procesar_y_responder, from_number, user_text)
+                        continue
+
                     if tipo == "interactive":
                         interactive_type = message["interactive"]["type"]
-
                         if interactive_type == "button_reply":
                             reply_id = message["interactive"]["button_reply"]["id"]
                             pasos_data = await obtener_pasos()
-
                             if reply_id == "ver_todos":
                                 resultado = procesar_mensaje("todos", pasos_data)
                             elif reply_id == "ver_abiertos":
@@ -257,27 +213,14 @@ async def webhook(request: Request, background_tasks: BackgroundTasks):
                             elif reply_id == "ver_cerrados":
                                 resultado = procesar_mensaje("cerrado", pasos_data)
                             elif reply_id == "buscar_pais":
-                                await enviar_botones_paises(from_number)
                                 continue
                             elif reply_id.startswith("pais_"):
                                 pais = reply_id.split("_")[1].capitalize()
                                 resultado = procesar_mensaje(pais, pasos_data)
                             else:
                                 continue
-
-                            for parte in dividir_mensaje(resultado):
-                                await enviar_respuesta(from_number, parte)
-                            continue
-
-                    # --- TEXTO ---
-                    if tipo == "text":
-                        user_text = message["text"]["body"].strip()
-                        await enviar_respuesta(from_number, "Procesando tu solicitud... ⏳")
-                        background_tasks.add_task(procesar_y_responder, from_number, user_text)
+                            if resultado and resultado not in ["bienvenida", "no_encontrado"]:
+                                for parte in dividir_mensaje(resultado):
+                                    await enviar_respuesta(from_number, parte)
                         continue
-
-                    # --- OTROS TIPOS ---
-                    print(f"Ignorado mensaje tipo '{tipo}' de {from_number}")
-                    await enviar_respuesta(from_number, "Por ahora sólo puedo responder a mensajes de texto o botones.")
-
     return {"status": "ok"}
