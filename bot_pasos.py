@@ -193,13 +193,25 @@ async def webhook(request: Request, background_tasks: BackgroundTasks):
 
                     if tipo != "text":
                         print(f"Ignorado mensaje tipo '{tipo}' de {from_number}")
-                        await enviar_respuesta(from_number, "👀 Por ahora sólo puedo responder a mensajes de texto.")
+                        await enviar_respuesta(from_number, "👀 Por ahora sólo puedo responder a mensajes de texto."\n"
+                                                            "Probá ingresando nuevamente el nombre del paso, la provincia o el país con el que conecta.")
                         continue
 
                     user_text = message["text"]["body"].strip()
+                    texto_norm = normalizar(user_text)
+
+                    # 👇 Detectar saludos antes de enviar “Procesando…”
+                    saludos = ["hola"]
+                    if any(s in texto_norm for s in saludos):
+                        # Responder directamente sin mostrar “Procesando...”
+                        pasos_data = []  # No hace falta scrapear si es solo saludo
+                        resultado = procesar_mensaje(user_text, pasos_data)
+                        for parte in dividir_mensaje(resultado):
+                            await enviar_respuesta(from_number, parte)
+                        continue
+
+                    # Para el resto de los mensajes sí mostramos el mensaje temporal
                     await enviar_respuesta(from_number, "Procesando tu solicitud... ⏳")
                     background_tasks.add_task(procesar_y_responder, from_number, user_text)
 
     return {"status": "ok"}
-
-
