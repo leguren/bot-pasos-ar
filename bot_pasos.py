@@ -98,8 +98,8 @@ def procesar_mensaje(user_text, pasos_data, start=0, limit=10):
 
     hay_mas = total_pasos > start + limit
     if hay_mas:
-        # Guardamos el estado del usuario para la próxima tanda
-        usuario_estado[texto] = {"pasos": pasos_completos, "start": start + limit, "limit": limit}
+        # Guardamos el estado del usuario por número de WhatsApp
+        usuario_estado[user_text] = {"pasos": pasos_completos, "start": start + limit, "limit": limit, "user_text": user_text}
 
     return msg.strip(), hay_mas
 
@@ -183,9 +183,10 @@ async def webhook(request: Request, background_tasks: BackgroundTasks):
                         continue
 
                     # 👇 Detectar botón “Cargar más”
-                    if texto_norm == "cargar_mas" and usuario_estado.get(from_number):
-                        estado = usuario_estado.pop(from_number)
-                        background_tasks.add_task(procesar_y_responder, from_number, user_text,
+                    if texto_norm == "cargar_mas" and usuario_estado.get(user_text):
+                        estado = usuario_estado.pop(user_text)
+                        background_tasks.add_task(procesar_y_responder, from_number,
+                                                  user_text=estado["user_text"],
                                                   start=estado["start"], limit=estado["limit"])
                         continue
 
