@@ -11,6 +11,9 @@ WHATSAPP_TOKEN = os.environ.get("WHATSAPP_TOKEN")
 PHONE_ID = os.environ.get("PHONE_ID")
 SCRAPER_URL = "https://scraper-pasos-ar-184988071501.southamerica-east1.run.app/scrapear"
 
+# Para paginado, guardamos el estado por usuario en memoria (puede reemplazarse por Redis)
+usuario_estado = {}
+
 # === FUNCIONES DE LÓGICA ===
 def normalizar(texto):
     if not texto:
@@ -28,8 +31,8 @@ def emoji_estado(estado: str) -> str:
         return "🔴"
     return "⚪"
 
-def procesar_mensaje(user_text, pasos_data):
-    """Procesamiento avanzado: clasifica resultados según coincidencia y prioriza por nombre."""
+def procesar_mensaje(user_text, pasos_data, start=0, limit=10):
+    """Procesamiento avanzado con paginado: clasifica resultados y prioriza por nombre."""
     texto = normalizar(user_text)
 
     # --- Mensaje de bienvenida ---
@@ -37,11 +40,11 @@ def procesar_mensaje(user_text, pasos_data):
     if any(s in texto for s in saludos):
         return ("¡Hola! 👋\n"
                 "Consultá el estado de los pasos internacionales de Argentina en tiempo real.\n"
-                "Ingresá el nombre del paso, la provincia en la que se encuentra o el país con el que conecta.")
+                "Ingresá el nombre del paso, la provincia en la que se encuentra o el país con el que conecta."), False
 
     # --- Ignorar inputs muy cortos ---
     if len(texto) < 4:
-        return "Por favor ingresá al menos 4 caracteres para buscar coincidencias. ❌"
+        return "Por favor ingresá al menos 4 caracteres para buscar coincidencias. ❌", False
 
     # --- Preparar resultados ---
     resultados_nombre = []
@@ -74,87 +77,55 @@ def procesar_mensaje(user_text, pasos_data):
         if ("abierto" in texto and "abierto" in estado_norm) or ("cerrado" in texto and "cerrado" in estado_norm):
             resultados_estado.setdefault(paso.get("estado",""), []).append(paso)
 
+    # --- Combinar todos los pasos en una lista para paginado ---
+    pasos_completos = resultados_nombre + sum(resultados_provincia.values(), []) + \
+                     sum(resultados_pais.values(), []) + sum(resultados_estado.values(), [])
+
+    total_pasos = len(pasos_completos)
+    pasos_a_enviar = pasos_completos[start:start+limit]
+
+    if not pasos_a_enviar:
+        return f"No encontré pasos que coincidan con '{user_text}'. ❌", False
+
     # --- Construir mensaje final ---
     msg = ""
-    primer_bloque = True
-
-    # Resultados por nombre
-    for p in resultados_nombre:
+    for p in pasos_a_enviar:
         icono = emoji_estado(p.get("estado",""))
         msg += (f"*Paso internacional {p.get('nombre','')}*\n"
                 f"{p.get('localidades','')}\n"
                 f"{p.get('estado','')} {icono}\n"
-                f"{p.get('ultima_actualizacion','')}\n")
-    primer_bloque = False if resultados_nombre else True
+                f"{p.get('ultima_actualizacion','')}\n\n")
 
-    # Resultados por provincia
-    for provincia, pasos in resultados_provincia.items():
-        if not primer_bloque:
-            msg += "\n"
-        msg += f"👉 *Pasos internacionales en {provincia}*\n"
-        for p in pasos:
-            icono = emoji_estado(p.get("estado",""))
-            msg += (f"*Paso internacional {p.get('nombre','')}*\n"
-                    f"{p.get('localidades','')}\n"
-                    f"{p.get('estado','')} {icono}\n"
-                    f"{p.get('ultima_actualizacion','')}\n")
-        primer_bloque = False
+    hay_mas = total_pasos > start + limit
+    if hay_mas:
+        # Guardamos el estado del usuario para la próxima tanda
+        usuario_estado[texto] = {"pasos": pasos_completos, "start": start + limit, "limit": limit}
 
-    # Resultados por país
-    for pais, pasos in resultados_pais.items():
-        if not primer_bloque:
-            msg += "\n"
-        msg += f"👉 *Pasos internacionales con {pais}*\n"
-        for p in pasos:
-            icono = emoji_estado(p.get("estado",""))
-            msg += (f"*Paso internacional {p.get('nombre','')}*\n"
-                    f"{p.get('localidades','')}\n"
-                    f"{p.get('estado','')} {icono}\n"
-                    f"{p.get('ultima_actualizacion','')}\n")
-        primer_bloque = False
-
-    # Resultados por estado
-    for estado, pasos in resultados_estado.items():
-        if not primer_bloque:
-            msg += "\n"
-        msg += f"👉 *Pasos internacionales {estado}s*\n"
-        for p in pasos:
-            icono = emoji_estado(p.get("estado",""))
-            msg += (f"*Paso internacional {p.get('nombre','')}*\n"
-                    f"{p.get('localidades','')}\n"
-                    f"{p.get('ultima_actualizacion','')}\n")
-        primer_bloque = False
-
-    # --- Mensaje si no se encontró coincidencia ---
-    if not msg:
-        return (f"No encontré pasos que coincidan con '{user_text}'. ❌\n"
-                "Probá ingresando nuevamente el nombre del paso, la provincia o el país con el que conecta.")
-
-    return msg.strip()
-
-# === DIVIDIR MENSAJES ===
-MAX_LEN = 4000
-def dividir_mensaje(msg):
-    pasos = msg.split("\n*Paso internacional ")
-    partes = []
-    buffer = ""
-    for i, paso in enumerate(pasos):
-        if i != 0:
-            paso = "*Paso internacional " + paso
-        if len(buffer) + len(paso) + 2 > MAX_LEN:
-            partes.append(buffer.strip())
-            buffer = paso
-        else:
-            buffer += ("\n\n" if buffer else "") + paso
-    if buffer:
-        partes.append(buffer.strip())
-    return partes
+    return msg.strip(), hay_mas
 
 # === FUNCIONES ASINCRÓNICAS ===
-async def enviar_respuesta(to_number, mensaje):
+async def enviar_respuesta(to_number, mensaje, hay_mas=False):
     url = f"https://graph.facebook.com/v20.0/{PHONE_ID}/messages"
     headers = {"Authorization": f"Bearer {WHATSAPP_TOKEN}", "Content-Type": "application/json"}
-    payload = {"messaging_product": "whatsapp", "to": to_number, "type": "text", "text": {"body": mensaje}}
+
+    if hay_mas:
+        payload = {
+            "messaging_product": "whatsapp",
+            "to": to_number,
+            "type": "interactive",
+            "interactive": {
+                "type": "button",
+                "body": {"text": mensaje},
+                "action": {
+                    "buttons": [
+                        {"type": "reply", "reply": {"id": "cargar_mas", "title": "Cargar más"}}
+                    ]
+                }
+            }
+        }
+    else:
+        payload = {"messaging_product": "whatsapp", "to": to_number, "type": "text", "text": {"body": mensaje}}
+
     async with httpx.AsyncClient(timeout=40) as client:
         try:
             await client.post(url, headers=headers, json=payload)
@@ -169,11 +140,10 @@ async def obtener_pasos():
         except Exception:
             return []
 
-async def procesar_y_responder(from_number, user_text):
+async def procesar_y_responder(from_number, user_text, start=0, limit=10):
     pasos_data = await obtener_pasos()
-    resultado = procesar_mensaje(user_text, pasos_data)
-    for parte in dividir_mensaje(resultado):
-        await enviar_respuesta(from_number, parte)
+    resultado, hay_mas = procesar_mensaje(user_text, pasos_data, start=start, limit=limit)
+    await enviar_respuesta(from_number, resultado, hay_mas=hay_mas)
 
 # === WEBHOOK DE VERIFICACIÓN ===
 @app.get("/webhook")
@@ -207,11 +177,16 @@ async def webhook(request: Request, background_tasks: BackgroundTasks):
                     # 👇 Detectar saludos antes de enviar “Procesando…”
                     saludos = ["hola"]
                     if any(s in texto_norm for s in saludos):
-                        # Responder directamente sin mostrar “Procesando...”
-                        pasos_data = []  # No hace falta scrapear si es solo saludo
-                        resultado = procesar_mensaje(user_text, pasos_data)
-                        for parte in dividir_mensaje(resultado):
-                            await enviar_respuesta(from_number, parte)
+                        pasos_data = []
+                        resultado, _ = procesar_mensaje(user_text, pasos_data)
+                        await enviar_respuesta(from_number, resultado)
+                        continue
+
+                    # 👇 Detectar botón “Cargar más”
+                    if texto_norm == "cargar_mas" and usuario_estado.get(from_number):
+                        estado = usuario_estado.pop(from_number)
+                        background_tasks.add_task(procesar_y_responder, from_number, user_text,
+                                                  start=estado["start"], limit=estado["limit"])
                         continue
 
                     # Para el resto de los mensajes sí mostramos el mensaje temporal
@@ -219,5 +194,3 @@ async def webhook(request: Request, background_tasks: BackgroundTasks):
                     background_tasks.add_task(procesar_y_responder, from_number, user_text)
 
     return {"status": "ok"}
-
-
