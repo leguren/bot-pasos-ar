@@ -88,7 +88,7 @@ def procesar_mensaje(user_text, pasos_data):
     # Resultados por nombre
     for p in resultados_nombre:
         icono = emoji_estado(p.get("estado",""))
-        msg += (f"*Paso internacional {p.get('nombre','')}*\n"
+        msg += (f"*{p.get('nombre','')}*\n"
                 f"{p.get('localidades','')}\n"
                 f"{p.get('estado','')} {icono}\n"
                 f"{p.get('ultima_actualizacion','')}\n")
@@ -101,7 +101,7 @@ def procesar_mensaje(user_text, pasos_data):
         msg += f"👉 *Pasos internacionales en {provincia}*\n"
         for p in pasos:
             icono = emoji_estado(p.get("estado",""))
-            msg += (f"*Paso internacional {p.get('nombre','')}*\n"
+            msg += (f"*{p.get('nombre','')}*\n"
                     f"{p.get('localidades','')}\n"
                     f"{p.get('estado','')} {icono}\n"
                     f"{p.get('ultima_actualizacion','')}\n")
@@ -114,7 +114,7 @@ def procesar_mensaje(user_text, pasos_data):
         msg += f"👉 *Pasos internacionales con {pais}*\n"
         for p in pasos:
             icono = emoji_estado(p.get("estado",""))
-            msg += (f"*Paso internacional {p.get('nombre','')}*\n"
+            msg += (f"*{p.get('nombre','')}*\n"
                     f"{p.get('localidades','')}\n"
                     f"{p.get('estado','')} {icono}\n"
                     f"{p.get('ultima_actualizacion','')}\n")
@@ -124,10 +124,10 @@ def procesar_mensaje(user_text, pasos_data):
     for estado, pasos in resultados_estado.items():
         if not primer_bloque:
             msg += "\n"
-        msg += f"👉 *Pasos internacionales {estado}s*\n"
+        msg += f"{icono} *Pasos internacionales {estado}s*\n"
         for p in pasos:
             icono = emoji_estado(p.get("estado",""))
-            msg += (f"*Paso internacional {p.get('nombre','')}*\n"
+            msg += (f"*{p.get('nombre','')}*\n"
                     f"{p.get('localidades','')}\n")
         primer_bloque = False
 
@@ -249,3 +249,4 @@ async def webhook(request: Request, background_tasks: BackgroundTasks):
                 background_tasks.add_task(procesar_y_responder, from_number, user_text)
 
     return {"status": "ok"}
+
