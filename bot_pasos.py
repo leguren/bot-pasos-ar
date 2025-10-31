@@ -91,44 +91,44 @@ def procesar_mensaje(user_text, pasos_data):
         msg += (f"*{p.get('nombre','')}*\n"
                 f"{p.get('localidades','')}\n"
                 f"{p.get('estado','')} {icono}\n"
-                f"{p.get('ultima_actualizacion','')}\n")
+                f"{p.get('ultima_actualizacion','')}\n\n")
     primer_bloque = False if resultados_nombre else True
 
     # Resultados por provincia
     for provincia, pasos in resultados_provincia.items():
         if not primer_bloque:
             msg += "\n"
-        msg += f"👉 *Pasos internacionales en {provincia}*\n"
+        msg += f"👉 *Pasos internacionales en {provincia}*\n\n"
         for p in pasos:
             icono = emoji_estado(p.get("estado",""))
             msg += (f"*{p.get('nombre','')}*\n"
                     f"{p.get('localidades','')}\n"
                     f"{p.get('estado','')} {icono}\n"
-                    f"{p.get('ultima_actualizacion','')}\n")
+                    f"{p.get('ultima_actualizacion','')}\n\n")
         primer_bloque = False
 
     # Resultados por país
     for pais, pasos in resultados_pais.items():
         if not primer_bloque:
             msg += "\n"
-        msg += f"👉 *Pasos internacionales con {pais}*\n"
+        msg += f"👉 *Pasos internacionales con {pais}*\n\n"
         for p in pasos:
             icono = emoji_estado(p.get("estado",""))
             msg += (f"*{p.get('nombre','')}*\n"
                     f"{p.get('localidades','')}\n"
                     f"{p.get('estado','')} {icono}\n"
-                    f"{p.get('ultima_actualizacion','')}\n")
+                    f"{p.get('ultima_actualizacion','')}\n\n")
         primer_bloque = False
 
     # Resultados por estado
     for estado, pasos in resultados_estado.items():
         if not primer_bloque:
             msg += "\n"
-        msg += f"{icono} *Pasos internacionales {estado}s*\n"
+        msg += f"{icono} *Pasos internacionales {estado}s*\n\n"
         for p in pasos:
             icono = emoji_estado(p.get("estado",""))
             msg += (f"*{p.get('nombre','')}*\n"
-                    f"{p.get('localidades','')}\n")
+                    f"{p.get('localidades','')}\n\n")
         primer_bloque = False
 
     # --- Mensaje si no se encontró coincidencia ---
@@ -142,12 +142,12 @@ def procesar_mensaje(user_text, pasos_data):
 # === DIVIDIR MENSAJES ===
 MAX_LEN = 4000
 def dividir_mensaje(msg):
-    pasos = msg.split("\n*Paso internacional ")
     partes = []
+    pasos = msg.split("\n\n")  # <- usamos el doble salto de línea como delimitador
     buffer = ""
-    for i, paso in enumerate(pasos):
-        if i != 0:
-            paso = "*Paso internacional " + paso
+    for paso in pasos:
+        if not paso.strip():
+            continue  # ignorar bloques vacíos
         if len(buffer) + len(paso) + 2 > MAX_LEN:
             partes.append(buffer.strip())
             buffer = paso
@@ -249,4 +249,3 @@ async def webhook(request: Request, background_tasks: BackgroundTasks):
                 background_tasks.add_task(procesar_y_responder, from_number, user_text)
 
     return {"status": "ok"}
-
