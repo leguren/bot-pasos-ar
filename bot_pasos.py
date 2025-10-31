@@ -40,76 +40,67 @@ def procesar_mensaje(user_text, pasos_data):
     resultados_pais = {}
     resultados_estado = {}
 
+    # --- Clasificación de coincidencias ---
     for paso in pasos_data:
         estado_norm = normalizar(paso.get("estado", ""))
         nombre_norm = normalizar(paso.get("nombre", ""))
         provincia_norm = normalizar(paso.get("provincia", ""))
         pais_norm = normalizar(paso.get("pais", ""))
 
-        # 1️⃣ Coincidencia por nombre
         if texto in nombre_norm:
             resultados_nombre.append(paso)
-            continue  # prioridad nombre: si coincide, no se agrega a provincia/pais/estado
+            continue  # prioridad nombre
 
-        # 2️⃣ Coincidencia por provincia
         if texto in provincia_norm:
-            resultados_provincia.setdefault(paso.get("provincia",""), []).append(paso)
+            resultados_provincia.setdefault(paso.get("provincia", ""), []).append(paso)
             continue
 
-        # 3️⃣ Coincidencia por país
         if texto in pais_norm:
-            resultados_pais.setdefault(paso.get("pais",""), []).append(paso)
+            resultados_pais.setdefault(paso.get("pais", ""), []).append(paso)
             continue
 
-        # 4️⃣ Coincidencia por estado
         if ("abierto" in texto and "abierto" in estado_norm) or ("cerrado" in texto and "cerrado" in estado_norm):
-            resultados_estado.setdefault(paso.get("estado",""), []).append(paso)
+            resultados_estado.setdefault(paso.get("estado", ""), []).append(paso)
 
-    # Construir mensaje final
-    msg = ""
+    # --- Helper para formatear cada paso ---
+    def formato_paso(p):
+        icono = emoji_estado(p.get("estado", ""))
+        return (f"*Paso internacional {p.get('nombre', '')}*\n"
+                f"{p.get('localidades', '')}\n"
+                f"{p.get('estado', '')} {icono}\n"
+                f"{p.get('provincia', '')} - {p.get('pais', '')}\n"
+                f"{p.get('ultima_actualizacion', '')}\n")
 
-    # --- Resultados por nombre ---
-    for p in resultados_nombre:
-        icono = emoji_estado(p.get("estado",""))
-        msg += (f"*Paso internacional {p.get('nombre','')}*\n"
-                f"{p.get('localidades','')}\n"
-                f"{p.get('estado','')} {icono}\n"
-                f"{p.get('ultima_actualizacion','')}\n")
+    # --- Construcción del mensaje final ---
+    partes = []
 
-    # --- Resultados por provincia ---
+    # Función para agregar bloque con divisoria
+    def agregar_bloque(titulo, pasos):
+        bloque = f"{titulo}\n\n" + "".join(formato_paso(p) for p in pasos)
+        bloque += "\n" + "—" * 30 + "\n"  # divisoria de 30 guiones
+        partes.append(bloque)
+
+    # Resultados por nombre
+    if resultados_nombre:
+        agregar_bloque("Resultados por nombre", resultados_nombre)
+
+    # Resultados por provincia
     for provincia, pasos in resultados_provincia.items():
-        msg += f"*Pasos internacionales en {provincia}*\n"
-        for p in pasos:
-            icono = emoji_estado(p.get("estado",""))
-            msg += (f"*Paso internacional {p.get('nombre','')}*\n"
-                    f"{p.get('localidades','')}\n"
-                    f"{p.get('estado','')} {icono}\n"
-                    f"{p.get('ultima_actualizacion','')}\n")
+        agregar_bloque(f"*Pasos internacionales en {provincia}*", pasos)
 
-    # --- Resultados por país ---
+    # Resultados por país
     for pais, pasos in resultados_pais.items():
-        msg += f"*Pasos internacionales con {pais}*\n"
-        for p in pasos:
-            icono = emoji_estado(p.get("estado",""))
-            msg += (f"*Paso internacional {p.get('nombre','')}*\n"
-                    f"{p.get('localidades','')}\n"
-                    f"{p.get('estado','')} {icono}\n"
-                    f"{p.get('ultima_actualizacion','')}\n")
+        agregar_bloque(f"*Pasos internacionales con {pais}*", pasos)
 
-    # --- Resultados por estado ---
+    # Resultados por estado
     for estado, pasos in resultados_estado.items():
-        msg += f"*Pasos internacionales {estado}s*\n"
-        for p in pasos:
-            icono = emoji_estado(p.get("estado",""))
-            msg += (f"*Paso internacional {p.get('nombre','')}*\n"
-                    f"{p.get('localidades','')}\n"
-                    f"{p.get('ultima_actualizacion','')}\n")
+        agregar_bloque(f"*Pasos internacionales {estado}s*", pasos)
 
-    if not msg:
+    if not partes:
         return ("Consultá el estado de los pasos internacionales de Argentina en tiempo real.\n"
                 "Ingresá el nombre del paso, la provincia en la que se encuentra o el país con el que conecta. 👉")
 
-    return msg.strip()
+    return "".join(partes).strip()
 
 # === DIVIDIR MENSAJES ===
 MAX_LEN = 4000
@@ -184,6 +175,7 @@ async def webhook(request: Request, background_tasks: BackgroundTasks):
                     background_tasks.add_task(procesar_y_responder, from_number, user_text)
 
     return {"status": "ok"}
+
 
 
 
