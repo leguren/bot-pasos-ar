@@ -31,7 +31,7 @@ def emoji_estado(estado: str) -> str:
         return "🔴"
     return "⚪"
 
-def procesar_mensaje(user_text, pasos_data, start=0, limit=10):
+def procesar_mensaje(user_text, pasos_data, start=0, limit=10, from_number=None):
     """Procesamiento avanzado con paginado: clasifica resultados y prioriza por nombre."""
     texto = normalizar(user_text)
 
@@ -97,9 +97,14 @@ def procesar_mensaje(user_text, pasos_data, start=0, limit=10):
                 f"{p.get('ultima_actualizacion','')}\n\n")
 
     hay_mas = total_pasos > start + limit
-    if hay_mas:
+    if hay_mas and from_number:
         # Guardamos el estado del usuario por número de WhatsApp
-        usuario_estado[user_text] = {"pasos": pasos_completos, "start": start + limit, "limit": limit, "user_text": user_text}
+        usuario_estado[from_number] = {
+            "pasos": pasos_completos,
+            "start": start + limit,
+            "limit": limit,
+            "user_text": user_text
+        }
 
     return msg.strip(), hay_mas
 
@@ -142,7 +147,7 @@ async def obtener_pasos():
 
 async def procesar_y_responder(from_number, user_text, start=0, limit=10):
     pasos_data = await obtener_pasos()
-    resultado, hay_mas = procesar_mensaje(user_text, pasos_data, start=start, limit=limit)
+    resultado, hay_mas = procesar_mensaje(user_text, pasos_data, start=start, limit=limit, from_number=from_number)
     await enviar_respuesta(from_number, resultado, hay_mas=hay_mas)
 
 # === WEBHOOK DE VERIFICACIÓN ===
@@ -165,16 +170,23 @@ async def webhook(request: Request, background_tasks: BackgroundTasks):
                     tipo = message.get("type", "")
                     from_number = message.get("from")
 
-                    if tipo != "text":
+                    # === Detectar texto o botón ===
+                    if tipo == "text":
+                        user_text = message["text"]["body"].strip()
+                    elif tipo == "button":
+                        user_text = message.get("button", {}).get("payload") or message.get("button", {}).get("text") or ""
+                    else:
                         print(f"Ignorado mensaje tipo '{tipo}' de {from_number}")
-                        await enviar_respuesta(from_number, "👀 Por ahora sólo puedo responder a mensajes de texto.\n"
-                                                            "Probá ingresando nuevamente el nombre del paso, la provincia o el país con el que conecta.")
+                        await enviar_respuesta(
+                            from_number,
+                            "👀 Por ahora sólo puedo responder a mensajes de texto o botones.\n"
+                            "Probá ingresando nuevamente el nombre del paso, la provincia o el país con el que conecta."
+                        )
                         continue
 
-                    user_text = message["text"]["body"].strip()
                     texto_norm = normalizar(user_text)
 
-                    # 👇 Detectar saludos antes de enviar “Procesando…”
+                    # === Mensaje de bienvenida (saludo) ===
                     saludos = ["hola"]
                     if any(s in texto_norm for s in saludos):
                         pasos_data = []
@@ -182,15 +194,22 @@ async def webhook(request: Request, background_tasks: BackgroundTasks):
                         await enviar_respuesta(from_number, resultado)
                         continue
 
-                    # 👇 Detectar botón “Cargar más”
-                    if texto_norm == "cargar_mas" and usuario_estado.get(user_text):
-                        estado = usuario_estado.pop(user_text)
-                        background_tasks.add_task(procesar_y_responder, from_number,
-                                                  user_text=estado["user_text"],
-                                                  start=estado["start"], limit=estado["limit"])
+                    # === Botón “Cargar más” ===
+                    if texto_norm == "cargar_mas":
+                        estado = usuario_estado.pop(from_number, None)
+                        if estado:
+                            background_tasks.add_task(
+                                procesar_y_responder,
+                                from_number,
+                                user_text=estado["user_text"],
+                                start=estado["start"],
+                                limit=estado["limit"]
+                            )
+                        else:
+                            await enviar_respuesta(from_number, "⚠ No hay más resultados para mostrar.")
                         continue
 
-                    # Para el resto de los mensajes sí mostramos el mensaje temporal
+                    # === Resto de mensajes ===
                     await enviar_respuesta(from_number, "Procesando tu solicitud... ⏳")
                     background_tasks.add_task(procesar_y_responder, from_number, user_text)
 
