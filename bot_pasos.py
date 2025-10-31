@@ -1,3 +1,4 @@
+# === IMPORTS Y CONFIG ===
 from fastapi import FastAPI, Request, BackgroundTasks
 import httpx
 import os
@@ -5,119 +6,91 @@ import unicodedata
 
 app = FastAPI()
 
-# --- CONFIGURACIÓN ---
 VERIFY_TOKEN = os.environ.get("VERIFY_TOKEN", "a8F3kPzR9wY2qLbH5tJv6mX1sC4nD0eQ")
-WHATSAPP_TOKEN = os.environ.get("WHATSAPP_TOKEN")  # token largo del Cloud API
-PHONE_ID = os.environ.get("PHONE_ID")  # id del número de WhatsApp Cloud API
+WHATSAPP_TOKEN = os.environ.get("WHATSAPP_TOKEN")
+PHONE_ID = os.environ.get("PHONE_ID")
 SCRAPER_URL = "https://scraper-pasos-ar-184988071501.southamerica-east1.run.app/scrapear"
 
-# --- FUNCIONES DE LOGICA ---
+# === FUNCIONES DE LÓGICA ===
 def normalizar(texto):
-    """Convierte a minúsculas, quita acentos y espacios extra."""
     if not texto:
         return ""
     texto = texto.strip().lower()
     texto = unicodedata.normalize("NFD", texto)
-    texto = "".join(c for c in texto if unicodedata.category(c) != "Mn")  # elimina acentos
+    texto = "".join(c for c in texto if unicodedata.category(c) != "Mn")
     return texto
+
+def emoji_estado(estado: str) -> str:
+    estado_norm = normalizar(estado)
+    if "abierto" in estado_norm:
+        return "🟢"
+    elif "cerrado" in estado_norm:
+        return "🔴"
+    return "⚪"
 
 def procesar_mensaje(user_text, pasos_data):
     texto = normalizar(user_text)
+    if not texto:
+        return ("Consultá el estado de los pasos internacionales de Argentina en tiempo real.\n"
+                "Ingresá el nombre del paso, la provincia en la que se encuentra o el país con el que conecta. 👉")
 
-    # --- 1) Buscar por estado ---
-    if "abierto" in texto or "cerrado" in texto:
-        estado_req = "Abierto" if "abierto" in texto else "Cerrado"
-        pasos_filtrados = [p for p in pasos_data if normalizar(p.get("estado","")) == normalizar(estado_req)]
-        if not pasos_filtrados:
-            return f"No hay pasos {estado_req}s."
-        msg = f"*Pasos internacionales {estado_req.lower()}s*\n\n"
-        for p in pasos_filtrados:
-            icono = "🟢" if estado_req == "Abierto" else "🔴"
-            msg += f"{p.get('nombre','')}\n"
-        return msg.strip()
+    resultados = []
+    for paso in pasos_data:
+        coincidencias = []
 
-    # --- 2) Buscar por nombre de paso ---
-    pasos_nombre = [p for p in pasos_data if texto in normalizar(p.get("nombre",""))]
-    if pasos_nombre:
+        estado_norm = normalizar(paso.get("estado",""))
+        if "abierto" in texto and "abierto" in estado_norm:
+            coincidencias.append("abierto")
+        elif "cerrado" in texto and "cerrado" in estado_norm:
+            coincidencias.append("cerrado")
+
+        if texto in normalizar(paso.get("nombre","")):
+            coincidencias.append("nombre")
+        if texto in normalizar(paso.get("provincia","")):
+            coincidencias.append("provincia")
+        if texto in normalizar(paso.get("pais","")):
+            coincidencias.append("pais")
+
+        if coincidencias:
+            resultados.append(paso)
+
+    if resultados:
         msg = ""
-        for p in pasos_nombre:
-            estado = normalizar(p.get("estado",""))
-            icono = "🟢" if "abierto" in estado else "🔴" if "cerrado" in estado else "⚪"
+        for p in resultados:
+            icono = emoji_estado(p.get("estado",""))
             msg += (f"*Paso internacional {p.get('nombre','')}*\n"
                     f"{p.get('localidades','')}\n"
                     f"{p.get('estado','')} {icono}\n"
+                    f"{p.get('provincia','')} - {p.get('pais','')}\n"
                     f"{p.get('ultima_actualizacion','')}\n\n")
         return msg.strip()
 
-    # --- 3) Buscar por provincia ---
-    pasos_prov = [p for p in pasos_data if texto in normalizar(p.get("provincia",""))]
-    if pasos_prov:
-        msg = f"*Pasos internacionales en {pasos_prov[0].get('provincia','')}*\n"
-        for p in pasos_prov:
-            estado = normalizar(p.get("estado",""))
-            icono = "🟢" if "abierto" in estado else "🔴" if "cerrado" in estado else "⚪"
-            msg += (f"\n*Paso internacional {p.get('nombre','')}*\n"
-                    f"{p.get('estado','')} {icono}\n"
-                    f"{p.get('ultima_actualizacion','')}\n")
-        return msg.strip()
-
-    # --- 4) Buscar por país ---
-    pasos_pais = [p for p in pasos_data if texto in normalizar(p.get("pais",""))]
-    if pasos_pais:
-        msg = f"*Pasos internacionales con {pasos_pais[0].get('pais','')}*\n"
-        for paso in pasos_pais:
-            estado = normalizar(paso.get("estado",""))
-            icono = "🟢" if "abierto" in estado else "🔴" if "cerrado" in estado else "⚪"
-            msg += (f"\n*Paso internacional {paso.get('nombre','')}*\n"
-                    f"{paso.get('estado','')} {icono}\n"
-                    f"{paso.get('ultima_actualizacion','')}\n")
-        return msg.strip()
-
-    # --- 5) Mensaje de bienvenida si no se encontró nada ---
     return ("Consultá el estado de los pasos internacionales de Argentina en tiempo real.\n"
-            "Ingresá el nombre del paso, la provincia en la que se encuentra o el país con el que conecta. 👉​")
+            "Ingresá el nombre del paso, la provincia en la que se encuentra o el país con el que conecta. 👉")
 
-# --- LÍMITE DE CARACTERES ---
-MAX_LEN = 4000  # límite de caracteres por mensaje
-
+# === DIVIDIR MENSAJES ===
+MAX_LEN = 4000
 def dividir_mensaje(msg):
-    pasos = msg.split("\n*Paso internacional ")  # separa cada paso
+    pasos = msg.split("\n*Paso internacional ")
     partes = []
     buffer = ""
-
     for i, paso in enumerate(pasos):
-        # rearmamos el paso completo (solo agregar *Paso internacional al inicio si no es el primero)
         if i != 0:
             paso = "*Paso internacional " + paso
-
-        # si agregar este paso supera el límite, guardamos el buffer actual y empezamos uno nuevo
         if len(buffer) + len(paso) + 2 > MAX_LEN:
             partes.append(buffer.strip())
             buffer = paso
         else:
-            if buffer:
-                buffer += "\n\n" + paso
-            else:
-                buffer = paso
-
+            buffer += ("\n\n" if buffer else "") + paso
     if buffer:
         partes.append(buffer.strip())
-
     return partes
 
-# --- FUNCIONES ASINCRÓNICAS ---
+# === FUNCIONES ASINCRÓNICAS ===
 async def enviar_respuesta(to_number, mensaje):
     url = f"https://graph.facebook.com/v20.0/{PHONE_ID}/messages"
-    headers = {
-        "Authorization": f"Bearer {WHATSAPP_TOKEN}",
-        "Content-Type": "application/json"
-    }
-    payload = {
-        "messaging_product": "whatsapp",
-        "to": to_number,
-        "type": "text",
-        "text": {"body": mensaje}
-    }
+    headers = {"Authorization": f"Bearer {WHATSAPP_TOKEN}", "Content-Type": "application/json"}
+    payload = {"messaging_product": "whatsapp", "to": to_number, "type": "text", "text": {"body": mensaje}}
     async with httpx.AsyncClient(timeout=40) as client:
         try:
             await client.post(url, headers=headers, json=payload)
@@ -138,14 +111,14 @@ async def procesar_y_responder(from_number, user_text):
     for parte in dividir_mensaje(resultado):
         await enviar_respuesta(from_number, parte)
 
-# --- WEBHOOK DE VERIFICACIÓN ---
+# === WEBHOOK DE VERIFICACIÓN ===
 @app.get("/webhook")
 async def verify(mode: str = None, hub_verify_token: str = None, hub_challenge: str = None):
     if mode == "subscribe" and hub_verify_token == VERIFY_TOKEN:
         return hub_challenge
     return "Error de verificación", 403
 
-# --- RECEPCIÓN DE MENSAJES ---
+# === RECEPCIÓN DE MENSAJES ===
 @app.post("/webhook")
 async def webhook(request: Request, background_tasks: BackgroundTasks):
     data = await request.json()
@@ -154,7 +127,6 @@ async def webhook(request: Request, background_tasks: BackgroundTasks):
             for change in entry.get("changes", []):
                 value = change.get("value", {})
                 messages = value.get("messages", [])
-
                 for message in messages:
                     tipo = message.get("type", "")
                     from_number = message.get("from")
@@ -165,11 +137,7 @@ async def webhook(request: Request, background_tasks: BackgroundTasks):
                         continue
 
                     user_text = message["text"]["body"].strip()
-
-                    # 1️⃣ Respuesta inmediata (menos de 10 segundos)
                     await enviar_respuesta(from_number, "Procesando tu solicitud... ⏳")
-
-                    # 2️⃣ Procesamiento en segundo plano
                     background_tasks.add_task(procesar_y_responder, from_number, user_text)
 
     return {"status": "ok"}
