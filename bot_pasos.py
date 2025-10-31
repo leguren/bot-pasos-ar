@@ -41,13 +41,14 @@ def procesar_mensaje(user_text, pasos_data):
     # --- Mensaje de bienvenida ---
     saludos = ["hola"]
     if any(s in texto for s in saludos):
-        return ("¡Hola! 👋\n"
-                "Consultá el estado de los pasos internacionales de Argentina en tiempo real.\n"
-                "Ingresá el nombre del paso, la provincia en la que se encuentra o el país con el que conecta.")
+        return ('¡Hola! 👋 ¿Cómo estás?\n'
+                'Acá vas a poder consultar el estado de los pasos internacionales de Argentina en tiempo real.\n'
+                '💡 Podés buscar por el nombre del paso, el de la provincia en la que se encuentra o el del país con el que conecta.')
 
     # --- Ignorar inputs muy cortos ---
     if len(texto) < 4:
-        return "Por favor ingresá al menos 4 caracteres para buscar coincidencias. ❌"
+        return 'Por favor, ingresá al menos 4 letras para poder buscar coincidencias.\n'
+        'Por ejemplo: escribí "agua" para buscar los pasos Agua Negra o Aguas Blancas - Bermejo.'
 
     # --- Preparar resultados ---
     resultados_nombre = []
@@ -127,14 +128,14 @@ def procesar_mensaje(user_text, pasos_data):
         for p in pasos:
             icono = emoji_estado(p.get("estado",""))
             msg += (f"*Paso internacional {p.get('nombre','')}*\n"
-                    f"{p.get('localidades','')}\n"
-                    f"{p.get('ultima_actualizacion','')}\n")
+                    f"{p.get('localidades','')}\n")
         primer_bloque = False
 
     # --- Mensaje si no se encontró coincidencia ---
     if not msg:
-        return (f"No encontré pasos que coincidan con '{user_text}'. ❌\n"
-                "Probá ingresando nuevamente el nombre del paso, la provincia o el país con el que conecta.")
+        return (f'No encontré pasos que coincidan con "{user_text}".\n'
+                'Probá ingresando nuevamente el nombre del paso, el de la provincia en la que se encuentra o el del país con el que conecta.\n'
+                '🔎 Recuerda que debés ingresar al menos 4 letras para que pueda buscar coincidencias.')
 
     return msg.strip()
 
@@ -204,9 +205,9 @@ async def webhook(request: Request, background_tasks: BackgroundTasks):
                         logging.info("Ignorado mensaje tipo '%s' de %s", tipo, from_number)
                         await enviar_respuesta(
                             from_number,
-                            "👀 Por ahora sólo puedo responder a mensajes de texto.\n"
-                            "Probá ingresando nuevamente el nombre del paso, la provincia o el país con el que conecta."
-                        )
+                            '👀 Por ahora no puedo escuchar audios, ni ver fotos o stickers.\n'
+                            'Probá ingresando nuevamente el nombre del paso, el de la provincia en la que se encuentra o el del país con el que conecta.\n'
+                            '🔎 Recuerda que debés ingresar al menos 4 letras para que pueda buscar coincidencias.')
                         continue
 
                     user_text = message["text"]["body"].strip()
@@ -214,18 +215,24 @@ async def webhook(request: Request, background_tasks: BackgroundTasks):
 
                     texto_norm = normalizar(user_text)
 
-                    # 👇 Detectar saludos antes de enviar “Procesando…”
-                    saludos = ["hola"]
-                    if any(s in texto_norm for s in saludos):
-                        # Responder directamente sin mostrar “Procesando...”
-                        pasos_data = []  # No hace falta scrapear si es solo saludo
-                        resultado = procesar_mensaje(user_text, pasos_data)
-                        for parte in dividir_mensaje(resultado):
-                            await enviar_respuesta(from_number, parte)
-                        continue
+# 👇 Detectar saludos antes de enviar “Procesando…”
+saludos = ["hola"]
+if any(s in texto_norm for s in saludos):
+    # Responder directamente sin mostrar “Procesando...”
+    pasos_data = []  # No hace falta scrapear si es solo saludo
+    resultado = procesar_mensaje(user_text, pasos_data)
+    for parte in dividir_mensaje(resultado):
+        await enviar_respuesta(from_number, parte)
+    continue
 
+# 👇 Detectar agradecimientos antes de mostrar “Procesando…”
+agradecimientos = ["gracias"]
+if any(a in texto_norm for a in agradecimientos):
+    await enviar_respuesta(from_number, '¡De nada! 🤩 Acá estaré para ayudarte cuando tengas nuevas consultas sobre el estado de los pasos internacionales.')
+    continue
+                    
                     # Para el resto de los mensajes sí mostramos el mensaje temporal
-                    await enviar_respuesta(from_number, "Procesando tu solicitud... ⏳")
+                    await enviar_respuesta(from_number, 'Buscando pasos... ⏳')
                     background_tasks.add_task(procesar_y_responder, from_number, user_text)
 
     return {"status": "ok"}
