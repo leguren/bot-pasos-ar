@@ -51,12 +51,12 @@ def procesar_mensaje(user_text, pasos_data):
         return ('Por favor, ingresá al menos 4 letras para poder buscar coincidencias.\n\n'
                 '💡 Por ejemplo: escribí "agua" para buscar los pasos Agua Negra o Aguas Blancas - Bermejo, o "abiertos con Brasil" para buscar todos los pasos abiertos con Brasil.')
 
-# --- Detectar filtros ---
-filtro_estado = None
-if "abierto" in texto or "abiertos" in texto:
-    filtro_estado = "abierto"
-elif "cerrado" in texto or "cerrados" in texto:
-    filtro_estado = "cerrado"
+    # --- Detectar filtros ---
+    filtro_estado = None
+    if "abierto" in texto or "abiertos" in texto:
+        filtro_estado = "abierto"
+    elif "cerrado" in texto or "cerrados" in texto:
+        filtro_estado = "cerrado"
 
     filtro_provincias = set()
     filtro_paises = set()
@@ -151,7 +151,6 @@ elif "cerrado" in texto or "cerrados" in texto:
         if not primer_bloque:
             msg += "\n"
         if key == "nombre":
-            # Coincidencias por nombre, sin título
             for p in pasos:
                 icono = emoji_estado(p.get("estado",""))
                 msg += (f"*{p.get('nombre','')}*\n"
@@ -320,11 +319,3 @@ async def webhook(request: Request, background_tasks: BackgroundTasks):
                 background_tasks.add_task(procesar_y_responder, from_number, user_text)
 
     return {"status": "ok"}
-
-
-
-
-
-
-
-
