@@ -35,7 +35,8 @@ def emoji_estado(estado: str) -> str:
     return "⚪"
 
 def procesar_mensaje(user_text, pasos_data):
-    """Procesamiento avanzado: clasifica resultados según coincidencia y prioriza por nombre."""
+    """Procesamiento avanzado: clasifica resultados según coincidencia y prioriza por nombre,
+    soportando búsqueda simple y combinada (estado + provincia + país)."""
     texto = normalizar(user_text)
 
     # --- Mensaje de bienvenida ---
@@ -48,56 +49,110 @@ def procesar_mensaje(user_text, pasos_data):
     # --- Ignorar inputs muy cortos ---
     if len(texto) < 4:
         return ('Por favor, ingresá al menos 4 letras para poder buscar coincidencias.\n\n'
-        '💡 Por ejemplo: escribí "agua" para buscar los pasos Agua Negra o Aguas Blancas - Bermejo.')
+                '💡 Por ejemplo: escribí "agua" para buscar los pasos Agua Negra o Aguas Blancas - Bermejo.')
 
-    # --- Preparar resultados ---
-    resultados_nombre = []
-    resultados_provincia = {}
-    resultados_pais = {}
-    resultados_estado = {}
+    # --- Detectar filtros ---
+    filtro_estado = None
+    if "abierto" in texto:
+        filtro_estado = "abierto"
+    elif "cerrado" in texto:
+        filtro_estado = "cerrado"
+
+    filtro_provincias = set()
+    filtro_paises = set()
+    nombres = []
 
     for paso in pasos_data:
-        estado_norm = normalizar(paso.get("estado", ""))
-        nombre_norm = normalizar(paso.get("nombre", ""))
-        provincia_norm = normalizar(paso.get("provincia", ""))
-        pais_norm = normalizar(paso.get("pais", ""))
+        provincia_norm = normalizar(paso.get("provincia",""))
+        pais_norm = normalizar(paso.get("pais",""))
+        nombre_norm = normalizar(paso.get("nombre",""))
 
-        # --- Estado primero ---
-        if "abierto" in texto and "abierto" in estado_norm:
-            resultados_estado.setdefault("abierto", []).append(paso)
-        elif "cerrado" in texto and "cerrado" in estado_norm:
-            resultados_estado.setdefault("cerrado", []).append(paso)
+        if provincia_norm in texto:
+            filtro_provincias.add(provincia_norm)
+        if pais_norm in texto:
+            filtro_paises.add(pais_norm)
+        if nombre_norm in texto:
+            nombres.append(paso)
 
-        # --- Prioridad por nombre ---
-        if texto in nombre_norm:
-            resultados_nombre.append(paso)
-            continue
+    # --- Determinar tipo de búsqueda ---
+    num_filtros = sum(bool(x) for x in [filtro_estado, filtro_provincias, filtro_paises])
+    resultados = []
 
-        # Provincia
-        if texto in provincia_norm:
-            resultados_provincia.setdefault(paso.get("provincia",""), []).append(paso)
-            continue
+    if num_filtros > 1:
+        # Búsqueda combinada
+        for paso in pasos_data:
+            estado_norm = normalizar(paso.get("estado",""))
+            provincia_norm = normalizar(paso.get("provincia",""))
+            pais_norm = normalizar(paso.get("pais",""))
+            cumple = True
+            if filtro_estado and filtro_estado not in estado_norm:
+                cumple = False
+            if filtro_provincias and provincia_norm not in filtro_provincias:
+                cumple = False
+            if filtro_paises and pais_norm not in filtro_paises:
+                cumple = False
+            if cumple:
+                resultados.append(paso)
+    else:
+        # Búsqueda simple
+        resultados = nombres[:]
+        for paso in pasos_data:
+            estado_norm = normalizar(paso.get("estado",""))
+            provincia_norm = normalizar(paso.get("provincia",""))
+            pais_norm = normalizar(paso.get("pais",""))
 
-        # País: coincidencia aproximada
-        if texto in pais_norm:
-            resultados_pais.setdefault(paso.get("pais",""), []).append(paso)
-            continue
+            if paso not in resultados:
+                if filtro_estado and filtro_estado in estado_norm:
+                    resultados.append(paso)
+                elif any(normalizar(p.get("provincia","")) in texto for p in [paso]):
+                    resultados.append(paso)
+                elif any(normalizar(p.get("pais","")) in texto for p in [paso]):
+                    resultados.append(paso)
 
     # --- Construir mensaje final ---
+    if not resultados:
+        return (f'No encontré pasos que coincidan con "{user_text}".\n\n'
+                'Probá ingresando nuevamente el nombre del paso, el de la provincia en la que se encuentra o el del país con el que conecta.\n'
+                '💡 Recordá que debés ingresar al menos 4 letras para que pueda buscar coincidencias.')
+
     msg = ""
     primer_bloque = True
 
-    # Resultados por nombre
-    for p in resultados_nombre:
+    # Agrupar resultados por estado, provincia y país para mostrar
+    agrupados_estado = {}
+    agrupados_provincia = {}
+    agrupados_pais = {}
+    agrupados_nombre = []
+
+    for p in resultados:
+        estado_norm = normalizar(p.get("estado",""))
+        provincia_norm = normalizar(p.get("provincia",""))
+        pais_norm = normalizar(p.get("pais",""))
+        nombre_norm = normalizar(p.get("nombre",""))
+
+        if texto in nombre_norm:
+            agrupados_nombre.append(p)
+        elif filtro_estado and filtro_estado in estado_norm:
+            agrupados_estado.setdefault(estado_norm, []).append(p)
+        elif filtro_provincias and provincia_norm in filtro_provincias:
+            agrupados_provincia.setdefault(p.get("provincia",""), []).append(p)
+        elif filtro_paises and pais_norm in filtro_paises:
+            agrupados_pais.setdefault(p.get("pais",""), []).append(p)
+        else:
+            # Si no coincide con filtro, lo agregamos por nombre como fallback
+            agrupados_nombre.append(p)
+
+    # Mostrar por nombre
+    for p in agrupados_nombre:
         icono = emoji_estado(p.get("estado",""))
         msg += (f"*{p.get('nombre','')}*\n"
                 f"{p.get('localidades','')}\n"
                 f"{p.get('estado','')} {icono}\n"
                 f"{p.get('ultima_actualizacion','')}\n\n")
-    primer_bloque = False if resultados_nombre else True
+    primer_bloque = False if agrupados_nombre else True
 
-    # Resultados por provincia
-    for provincia, pasos in resultados_provincia.items():
+    # Mostrar por provincia
+    for provincia, pasos in agrupados_provincia.items():
         if not primer_bloque:
             msg += "\n"
         msg += f"👉 *Pasos internacionales en {provincia}*\n\n"
@@ -109,8 +164,8 @@ def procesar_mensaje(user_text, pasos_data):
                     f"{p.get('ultima_actualizacion','')}\n\n")
         primer_bloque = False
 
-    # Resultados por país
-    for pais, pasos in resultados_pais.items():
+    # Mostrar por país
+    for pais, pasos in agrupados_pais.items():
         if not primer_bloque:
             msg += "\n"
         msg += f"👉 *Pasos internacionales con {pais}*\n\n"
@@ -122,8 +177,8 @@ def procesar_mensaje(user_text, pasos_data):
                     f"{p.get('ultima_actualizacion','')}\n\n")
         primer_bloque = False
 
-    # Resultados por estado
-    for estado, pasos in resultados_estado.items():
+    # Mostrar por estado
+    for estado, pasos in agrupados_estado.items():
         if not primer_bloque:
             msg += "\n"
         msg += f"👉 *Pasos internacionales {estado}s*\n\n"
@@ -132,12 +187,6 @@ def procesar_mensaje(user_text, pasos_data):
             msg += (f"*{p.get('nombre','')}*\n"
                     f"{p.get('localidades','')}\n\n")
         primer_bloque = False
-
-    # --- Mensaje si no se encontró coincidencia ---
-    if not msg:
-        return (f'No encontré pasos que coincidan con "{user_text}".\n\n'
-                'Probá ingresando nuevamente el nombre del paso, el de la provincia en la que se encuentra o el del país con el que conecta.\n'
-                '💡 Recordá que debés ingresar al menos 4 letras para que pueda buscar coincidencias.')
 
     return msg.strip()
 
@@ -251,5 +300,6 @@ async def webhook(request: Request, background_tasks: BackgroundTasks):
                 background_tasks.add_task(procesar_y_responder, from_number, user_text)
 
     return {"status": "ok"}
+
 
 
