@@ -35,7 +35,8 @@ def emoji_estado(estado: str) -> str:
     return "⚪"
 
 def procesar_mensaje(user_text, pasos_data):
-    """Procesamiento avanzado: soporta búsqueda simple, combinada, y la palabra 'todos' con filtros."""
+    """Procesamiento avanzado: soporta búsqueda simple, combinada, y la palabra 'todos' con filtros.
+       Se aplica coincidencia parcial por nombre, provincia y país, sin stopwords."""
     texto = normalizar(user_text)
 
     # --- Mensaje de bienvenida ---
@@ -43,7 +44,7 @@ def procesar_mensaje(user_text, pasos_data):
     if any(s in texto for s in saludos):
         return ('¡Hola! 👋 ¿Cómo estás?\n\n'
                 'Acá vas a poder consultar el estado de los pasos internacionales de Argentina en tiempo real.\n\n'
-                'Podés buscar por el nombre del paso, el de la provincia en la que se encuentra o el del país con el que conecta.\n'
+                'Podés buscar por el nombre del paso, la provincia en la que se encuentra o el país con el que conecta.\n'
                 '💡 Por ejemplo: escribí "agua" para buscar los pasos Agua Negra o Aguas Blancas - Bermejo, o "abiertos con Brasil" para buscar todos los pasos abiertos con Brasil.')
 
     # --- Ignorar inputs muy cortos ---
@@ -64,31 +65,37 @@ def procesar_mensaje(user_text, pasos_data):
 
     todos = "todos" in texto
 
+    # Dividimos el texto en palabras, sin eliminar nada
+    user_words = texto.split()
+
     for paso in pasos_data:
         provincia_norm = normalizar(paso.get("provincia",""))
         pais_norm = normalizar(paso.get("pais",""))
         nombre_norm = normalizar(paso.get("nombre",""))
+        estado_norm = normalizar(paso.get("estado",""))
 
-        if provincia_norm in texto:
-            filtro_provincias.add(provincia_norm)
-        if pais_norm in texto:
-            filtro_paises.add(pais_norm)
-        if nombre_norm in texto:
+        # --- Búsqueda por nombre ---
+        if any(word in nombre_norm for word in user_words):
             nombres.append(paso)
+
+        # --- Búsqueda por provincia ---
+        if any(word in provincia_norm for word in user_words):
+            filtro_provincias.add(provincia_norm)
+
+        # --- Búsqueda por país ---
+        if any(word in pais_norm for word in user_words):
+            filtro_paises.add(pais_norm)
 
     # --- Construir resultados ---
     resultados = []
 
     if todos and not (filtro_estado or filtro_provincias or filtro_paises):
-        # Caso "todos" solo: devolver toda la lista
         resultados = pasos_data[:]
     else:
-        # Caso con filtros o búsqueda normal
         num_filtros = sum(bool(x) for x in [filtro_estado, filtro_provincias, filtro_paises])
         combinada = num_filtros > 1
 
         if combinada or todos:
-            # Búsqueda combinada o "todos con filtros"
             for paso in pasos_data:
                 estado_norm = normalizar(paso.get("estado",""))
                 provincia_norm = normalizar(paso.get("provincia",""))
@@ -103,7 +110,6 @@ def procesar_mensaje(user_text, pasos_data):
                 if cumple:
                     resultados.append(paso)
         else:
-            # Búsqueda simple: nombre, provincia, país, estado
             resultados = nombres[:]
             for paso in pasos_data:
                 estado_norm = normalizar(paso.get("estado",""))
@@ -146,7 +152,7 @@ def procesar_mensaje(user_text, pasos_data):
                    estado_norm if filtro_estado and filtro_estado in estado_norm else None)
             grouped_combinada[key].append(paso)
         else:
-            if nombre_norm in texto:
+            if any(word in nombre_norm for word in user_words):
                 grouped_simple["nombre"].append(paso)
             elif provincia_norm in filtro_provincias:
                 grouped_simple[f"provincia:{provincia_norm}"].append(paso)
