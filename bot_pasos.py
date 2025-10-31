@@ -35,8 +35,7 @@ def emoji_estado(estado: str) -> str:
     return "⚪"
 
 def procesar_mensaje(user_text, pasos_data):
-    """Procesamiento avanzado: clasifica resultados según coincidencia y prioriza por nombre,
-    soportando búsqueda simple y combinada (estado + provincia + país)."""
+    """Procesamiento avanzado: soporta búsqueda simple y combinada, con títulos dinámicos."""
     texto = normalizar(user_text)
 
     # --- Mensaje de bienvenida ---
@@ -74,11 +73,13 @@ def procesar_mensaje(user_text, pasos_data):
         if nombre_norm in texto:
             nombres.append(paso)
 
-    # --- Determinar tipo de búsqueda ---
+    # --- Determinar si es búsqueda combinada ---
     num_filtros = sum(bool(x) for x in [filtro_estado, filtro_provincias, filtro_paises])
+    combinada = num_filtros > 1
+
     resultados = []
 
-    if num_filtros > 1:
+    if combinada:
         # Búsqueda combinada
         for paso in pasos_data:
             estado_norm = normalizar(paso.get("estado",""))
@@ -94,7 +95,7 @@ def procesar_mensaje(user_text, pasos_data):
             if cumple:
                 resultados.append(paso)
     else:
-        # Búsqueda simple
+        # Búsqueda simple: nombre, provincia, país, estado
         resultados = nombres[:]
         for paso in pasos_data:
             estado_norm = normalizar(paso.get("estado",""))
@@ -104,9 +105,9 @@ def procesar_mensaje(user_text, pasos_data):
             if paso not in resultados:
                 if filtro_estado and filtro_estado in estado_norm:
                     resultados.append(paso)
-                elif any(normalizar(p.get("provincia","")) in texto for p in [paso]):
+                elif provincia_norm in filtro_provincias:
                     resultados.append(paso)
-                elif any(normalizar(p.get("pais","")) in texto for p in [paso]):
+                elif pais_norm in filtro_paises:
                     resultados.append(paso)
 
     # --- Construir mensaje final ---
@@ -118,38 +119,84 @@ def procesar_mensaje(user_text, pasos_data):
     msg = ""
     primer_bloque = True
 
-    # Agrupar resultados por combinación de filtros para mostrar
-    grupos = []
-    for p in resultados:
-        estado_norm = normalizar(p.get("estado",""))
-        provincia_norm = normalizar(p.get("provincia",""))
-        pais_norm = normalizar(p.get("pais",""))
-
-        grupos.append({
-            "paso": p,
-            "estado": estado_norm if filtro_estado and filtro_estado in estado_norm else None,
-            "provincia": provincia_norm if filtro_provincias and provincia_norm in filtro_provincias else None,
-            "pais": pais_norm if filtro_paises and pais_norm in filtro_paises else None
-        })
-
-    # Mostrar resultados agrupados por coincidencia de filtros
     from collections import defaultdict
-    grouped = defaultdict(list)
-    for g in grupos:
-        key = (g["provincia"], g["pais"], g["estado"])
-        grouped[key].append(g["paso"])
+    # --- Agrupar resultados ---
+    grouped_simple = defaultdict(list)
+    grouped_combinada = defaultdict(list)
 
-    for (provincia, pais, estado), pasos in grouped.items():
+    for paso in resultados:
+        estado_norm = normalizar(paso.get("estado",""))
+        provincia_norm = normalizar(paso.get("provincia",""))
+        pais_norm = normalizar(paso.get("pais",""))
+        nombre_norm = normalizar(paso.get("nombre",""))
+
+        if combinada:
+            key = (provincia_norm if provincia_norm in filtro_provincias else None,
+                   pais_norm if pais_norm in filtro_paises else None,
+                   estado_norm if filtro_estado and filtro_estado in estado_norm else None)
+            grouped_combinada[key].append(paso)
+        else:
+            if nombre_norm in texto:
+                grouped_simple["nombre"].append(paso)
+            elif provincia_norm in filtro_provincias:
+                grouped_simple[f"provincia:{provincia_norm}"].append(paso)
+            elif pais_norm in filtro_paises:
+                grouped_simple[f"pais:{pais_norm}"].append(paso)
+            elif filtro_estado and filtro_estado in estado_norm:
+                grouped_simple[f"estado:{estado_norm}"].append(paso)
+
+    # --- Mostrar resultados simples ---
+    for key, pasos in grouped_simple.items():
         if not primer_bloque:
             msg += "\n"
+        if key == "nombre":
+            # Coincidencias por nombre, sin título
+            for p in pasos:
+                icono = emoji_estado(p.get("estado",""))
+                msg += (f"*{p.get('nombre','')}*\n"
+                        f"{p.get('localidades','')}\n"
+                        f"{p.get('estado','')} {icono}\n"
+                        f"{p.get('ultima_actualizacion','')}\n\n")
+        elif key.startswith("provincia:"):
+            provincia = key.split(":")[1]
+            msg += f"👉 *Pasos internacionales en {provincia.title()}*\n\n"
+            for p in pasos:
+                icono = emoji_estado(p.get("estado",""))
+                msg += (f"*{p.get('nombre','')}*\n"
+                        f"{p.get('localidades','')}\n"
+                        f"{p.get('estado','')} {icono}\n"
+                        f"{p.get('ultima_actualizacion','')}\n\n")
+        elif key.startswith("pais:"):
+            pais = key.split(":")[1]
+            msg += f"👉 *Pasos internacionales con {pais.title()}*\n\n"
+            for p in pasos:
+                icono = emoji_estado(p.get("estado",""))
+                msg += (f"*{p.get('nombre','')}*\n"
+                        f"{p.get('localidades','')}\n"
+                        f"{p.get('estado','')} {icono}\n"
+                        f"{p.get('ultima_actualizacion','')}\n\n")
+        elif key.startswith("estado:"):
+            estado = key.split(":")[1]
+            msg += f"👉 *Pasos internacionales {estado}s*\n\n"
+            for p in pasos:
+                icono = emoji_estado(p.get("estado",""))
+                msg += (f"*{p.get('nombre','')}*\n"
+                        f"{p.get('localidades','')}\n"
+                        f"{p.get('estado','')} {icono}\n"
+                        f"{p.get('ultima_actualizacion','')}\n\n")
+        primer_bloque = False
 
+    # --- Mostrar resultados combinados ---
+    for (provincia, pais, estado), pasos in grouped_combinada.items():
+        if not primer_bloque:
+            msg += "\n"
         titulo = "👉 *Pasos internacionales"
         if provincia:
             titulo += f" en {provincia.title()}"
         if pais:
             titulo += f" con {pais.title()}"
         if estado:
-            titulo += f" {estado}s"
+            titulo += f" {estado}"
         titulo += "*\n\n"
 
         msg += titulo
@@ -159,7 +206,6 @@ def procesar_mensaje(user_text, pasos_data):
                     f"{p.get('localidades','')}\n"
                     f"{p.get('estado','')} {icono}\n"
                     f"{p.get('ultima_actualizacion','')}\n\n")
-
         primer_bloque = False
 
     return msg.strip()
@@ -274,6 +320,7 @@ async def webhook(request: Request, background_tasks: BackgroundTasks):
                 background_tasks.add_task(procesar_y_responder, from_number, user_text)
 
     return {"status": "ok"}
+
 
 
 
