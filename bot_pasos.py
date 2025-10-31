@@ -118,74 +118,48 @@ def procesar_mensaje(user_text, pasos_data):
     msg = ""
     primer_bloque = True
 
-    # Agrupar resultados por estado, provincia y país para mostrar
-    agrupados_estado = {}
-    agrupados_provincia = {}
-    agrupados_pais = {}
-    agrupados_nombre = []
-
+    # Agrupar resultados por combinación de filtros para mostrar
+    grupos = []
     for p in resultados:
         estado_norm = normalizar(p.get("estado",""))
         provincia_norm = normalizar(p.get("provincia",""))
         pais_norm = normalizar(p.get("pais",""))
-        nombre_norm = normalizar(p.get("nombre",""))
 
-        if texto in nombre_norm:
-            agrupados_nombre.append(p)
-        elif filtro_estado and filtro_estado in estado_norm:
-            agrupados_estado.setdefault(estado_norm, []).append(p)
-        elif filtro_provincias and provincia_norm in filtro_provincias:
-            agrupados_provincia.setdefault(p.get("provincia",""), []).append(p)
-        elif filtro_paises and pais_norm in filtro_paises:
-            agrupados_pais.setdefault(p.get("pais",""), []).append(p)
-        else:
-            # Si no coincide con filtro, lo agregamos por nombre como fallback
-            agrupados_nombre.append(p)
+        grupos.append({
+            "paso": p,
+            "estado": estado_norm if filtro_estado and filtro_estado in estado_norm else None,
+            "provincia": provincia_norm if filtro_provincias and provincia_norm in filtro_provincias else None,
+            "pais": pais_norm if filtro_paises and pais_norm in filtro_paises else None
+        })
 
-    # Mostrar por nombre
-    for p in agrupados_nombre:
-        icono = emoji_estado(p.get("estado",""))
-        msg += (f"*{p.get('nombre','')}*\n"
-                f"{p.get('localidades','')}\n"
-                f"{p.get('estado','')} {icono}\n"
-                f"{p.get('ultima_actualizacion','')}\n\n")
-    primer_bloque = False if agrupados_nombre else True
+    # Mostrar resultados agrupados por coincidencia de filtros
+    from collections import defaultdict
+    grouped = defaultdict(list)
+    for g in grupos:
+        key = (g["provincia"], g["pais"], g["estado"])
+        grouped[key].append(g["paso"])
 
-    # Mostrar por provincia
-    for provincia, pasos in agrupados_provincia.items():
+    for (provincia, pais, estado), pasos in grouped.items():
         if not primer_bloque:
             msg += "\n"
-        msg += f"👉 *Pasos internacionales en {provincia}*\n\n"
+
+        titulo = "👉 *Pasos internacionales"
+        if provincia:
+            titulo += f" en {provincia.title()}"
+        if pais:
+            titulo += f" con {pais.title()}"
+        if estado:
+            titulo += f" {estado}s"
+        titulo += "*\n\n"
+
+        msg += titulo
         for p in pasos:
             icono = emoji_estado(p.get("estado",""))
             msg += (f"*{p.get('nombre','')}*\n"
                     f"{p.get('localidades','')}\n"
                     f"{p.get('estado','')} {icono}\n"
                     f"{p.get('ultima_actualizacion','')}\n\n")
-        primer_bloque = False
 
-    # Mostrar por país
-    for pais, pasos in agrupados_pais.items():
-        if not primer_bloque:
-            msg += "\n"
-        msg += f"👉 *Pasos internacionales con {pais}*\n\n"
-        for p in pasos:
-            icono = emoji_estado(p.get("estado",""))
-            msg += (f"*{p.get('nombre','')}*\n"
-                    f"{p.get('localidades','')}\n"
-                    f"{p.get('estado','')} {icono}\n"
-                    f"{p.get('ultima_actualizacion','')}\n\n")
-        primer_bloque = False
-
-    # Mostrar por estado
-    for estado, pasos in agrupados_estado.items():
-        if not primer_bloque:
-            msg += "\n"
-        msg += f"👉 *Pasos internacionales {estado}s*\n\n"
-        for p in pasos:
-            icono = emoji_estado(p.get("estado",""))
-            msg += (f"*{p.get('nombre','')}*\n"
-                    f"{p.get('localidades','')}\n\n")
         primer_bloque = False
 
     return msg.strip()
@@ -300,6 +274,7 @@ async def webhook(request: Request, background_tasks: BackgroundTasks):
                 background_tasks.add_task(procesar_y_responder, from_number, user_text)
 
     return {"status": "ok"}
+
 
 
 
