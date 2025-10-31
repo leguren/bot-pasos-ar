@@ -18,7 +18,7 @@ def normalizar(texto):
         return ""
     texto = texto.strip().lower()
     texto = unicodedata.normalize("NFD", texto)
-    texto = "".join(c for c in texto if unicodedata.category(c) != "Mn")  # elimina acentos
+    texto = "".join(c for c in texto if unicodedata.category(c) != "Mn")
     return texto
 
 def procesar_mensaje(user_text, pasos_data):
@@ -32,7 +32,6 @@ def procesar_mensaje(user_text, pasos_data):
             return f"No hay pasos {estado_req}s."
         msg = f"*Pasos internacionales {estado_req.lower()}s*\n\n"
         for p in pasos_filtrados:
-            icono = "🟢" if estado_req == "Abierto" else "🔴"
             msg += f"{p.get('nombre','')}\n"
         return msg.strip()
 
@@ -73,24 +72,20 @@ def procesar_mensaje(user_text, pasos_data):
                     f"{paso.get('ultima_actualizacion','')}\n")
         return msg.strip()
 
-    # --- 5) Mensaje de bienvenida si no se encontró nada ---
-    return ("Consultá el estado de los pasos internacionales de Argentina en tiempo real.\n"
-            "Ingresá el nombre del paso, la provincia en la que se encuentra o el país con el que conecta. 👉​")
+    # --- 5) Mensaje por defecto (no encontrado) ---
+    return None  # retornamos None para diferenciar "no encontrado"
 
 # --- LÍMITE DE CARACTERES ---
-MAX_LEN = 4000  # límite de caracteres por mensaje
+MAX_LEN = 4000
 
 def dividir_mensaje(msg):
-    pasos = msg.split("\n*Paso internacional ")  # separa cada paso
+    pasos = msg.split("\n*Paso internacional ")
     partes = []
     buffer = ""
 
     for i, paso in enumerate(pasos):
-        # rearmamos el paso completo (solo agregar *Paso internacional al inicio si no es el primero)
         if i != 0:
             paso = "*Paso internacional " + paso
-
-        # si agregar este paso supera el límite, guardamos el buffer actual y empezamos uno nuevo
         if len(buffer) + len(paso) + 2 > MAX_LEN:
             partes.append(buffer.strip())
             buffer = paso
@@ -105,20 +100,17 @@ def dividir_mensaje(msg):
 
     return partes
 
-# --- NUEVAS FUNCIONES DE BOTONES ---
+# --- FUNCIONES DE BOTONES ---
 async def enviar_bienvenida_con_botones(to_number):
     url = f"https://graph.facebook.com/v20.0/{PHONE_ID}/messages"
-    headers = {
-        "Authorization": f"Bearer {WHATSAPP_TOKEN}",
-        "Content-Type": "application/json"
-    }
+    headers = {"Authorization": f"Bearer {WHATSAPP_TOKEN}", "Content-Type": "application/json"}
     payload = {
         "messaging_product": "whatsapp",
         "to": to_number,
         "type": "interactive",
         "interactive": {
             "type": "button",
-            "body": {"text": "Consultá el estado de los pasos internacionales de Argentina en tiempo real. Elegí una opción:"},
+            "body": {"text": "Hola! Acá podés consultar los pasos por nombre, provincia o con los siguientes botones:"},
             "action": {
                 "buttons": [
                     {"type": "reply", "reply": {"id": "ver_todos", "title": "Ver todos los pasos"}},
@@ -135,13 +127,35 @@ async def enviar_bienvenida_con_botones(to_number):
         except Exception as e:
             print(f"No se pudo enviar mensaje a {to_number}: {e}")
 
+async def enviar_no_encontre_con_botones(to_number):
+    url = f"https://graph.facebook.com/v20.0/{PHONE_ID}/messages"
+    headers = {"Authorization": f"Bearer {WHATSAPP_TOKEN}", "Content-Type": "application/json"}
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": to_number,
+        "type": "interactive",
+        "interactive": {
+            "type": "button",
+            "body": {"text": "No encontré lo que estás buscando. Intentá nuevamente o probá con los botones:"},
+            "action": {
+                "buttons": [
+                    {"type": "reply", "reply": {"id": "ver_todos", "title": "Ver todos los pasos"}},
+                    {"type": "reply", "reply": {"id": "ver_abiertos", "title": "Ver solo los abiertos"}},
+                    {"type": "reply", "reply": {"id": "ver_cerrados", "title": "Ver solo los cerrados"}},
+                    {"type": "reply", "reply": {"id": "buscar_pais", "title": "Buscar por país"}}
+                ]
+            }
+        }
+    }
+    async with httpx.AsyncClient(timeout=20) as client:
+        try:
+            await client.post(url, headers=headers, json=payload)
+        except Exception as e:
+            print(f"No se pudo enviar mensaje a {to_number}: {e}")
 
 async def enviar_botones_paises(to_number):
     url = f"https://graph.facebook.com/v20.0/{PHONE_ID}/messages"
-    headers = {
-        "Authorization": f"Bearer {WHATSAPP_TOKEN}",
-        "Content-Type": "application/json"
-    }
+    headers = {"Authorization": f"Bearer {WHATSAPP_TOKEN}", "Content-Type": "application/json"}
     payload = {
         "messaging_product": "whatsapp",
         "to": to_number,
@@ -166,19 +180,11 @@ async def enviar_botones_paises(to_number):
         except Exception as e:
             print(f"No se pudo enviar mensaje a {to_number}: {e}")
 
-# --- FUNCIONES ASINCRÓNICAS ---
+# --- ENVIAR TEXTO SIMPLE ---
 async def enviar_respuesta(to_number, mensaje):
     url = f"https://graph.facebook.com/v20.0/{PHONE_ID}/messages"
-    headers = {
-        "Authorization": f"Bearer {WHATSAPP_TOKEN}",
-        "Content-Type": "application/json"
-    }
-    payload = {
-        "messaging_product": "whatsapp",
-        "to": to_number,
-        "type": "text",
-        "text": {"body": mensaje}
-    }
+    headers = {"Authorization": f"Bearer {WHATSAPP_TOKEN}", "Content-Type": "application/json"}
+    payload = {"messaging_product": "whatsapp", "to": to_number, "type": "text", "text": {"body": mensaje}}
     async with httpx.AsyncClient(timeout=20) as client:
         try:
             await client.post(url, headers=headers, json=payload)
@@ -193,16 +199,25 @@ async def obtener_pasos():
         except Exception:
             return []
 
+# --- PROCESAR MENSAJE Y RESPONDER ---
 async def procesar_y_responder(from_number, user_text):
     pasos_data = await obtener_pasos()
-    resultado = procesar_mensaje(user_text, pasos_data)
+    texto_norm = normalizar(user_text)
 
-    # si el resultado es el mensaje de bienvenida, enviamos botones
-    if "Consultá el estado de los pasos internacionales" in resultado:
+    # 1) Bienvenida si dice "hola"
+    if texto_norm == "hola":
         await enviar_bienvenida_con_botones(from_number)
         return
 
-    # dividimos y enviamos normalmente
+    # 2) Procesar mensaje normalmente
+    resultado = procesar_mensaje(user_text, pasos_data)
+
+    # 3) Si no encontró nada, enviar "no encontré"
+    if resultado is None:
+        await enviar_no_encontre_con_botones(from_number)
+        return
+
+    # 4) Enviar resultado dividido
     for parte in dividir_mensaje(resultado):
         await enviar_respuesta(from_number, parte)
 
@@ -213,7 +228,7 @@ async def verify(mode: str = None, hub_verify_token: str = None, hub_challenge: 
         return hub_challenge
     return "Error de verificación", 403
 
-# --- RECEPCIÓN DE MENSAJES CORREGIDA ---
+# --- WEBHOOK DE RECEPCIÓN ---
 @app.post("/webhook")
 async def webhook(request: Request, background_tasks: BackgroundTasks):
     data = await request.json()
@@ -227,7 +242,7 @@ async def webhook(request: Request, background_tasks: BackgroundTasks):
                     tipo = message.get("type", "")
                     from_number = message.get("from")
 
-                    # --- MENSAJES DE BOTÓN CORREGIDOS ---
+                    # --- BOTONES ---
                     if tipo == "interactive":
                         interactive_type = message["interactive"]["type"]
 
@@ -243,28 +258,25 @@ async def webhook(request: Request, background_tasks: BackgroundTasks):
                                 resultado = procesar_mensaje("cerrado", pasos_data)
                             elif reply_id == "buscar_pais":
                                 await enviar_botones_paises(from_number)
-                                continue  # salta al siguiente mensaje
+                                continue
                             elif reply_id.startswith("pais_"):
                                 pais = reply_id.split("_")[1].capitalize()
                                 resultado = procesar_mensaje(pais, pasos_data)
                             else:
-                                continue  # payload desconocido
+                                continue
 
-                            # enviar resultado dividido en partes
                             for parte in dividir_mensaje(resultado):
                                 await enviar_respuesta(from_number, parte)
-                            continue  # salta al siguiente mensaje
+                            continue
 
-                    # --- MENSAJES DE TEXTO ---
+                    # --- TEXTO ---
                     if tipo == "text":
                         user_text = message["text"]["body"].strip()
-                        # respuesta inmediata
                         await enviar_respuesta(from_number, "Procesando tu solicitud... ⏳")
-                        # procesamiento en segundo plano
                         background_tasks.add_task(procesar_y_responder, from_number, user_text)
                         continue
 
-                    # --- MENSAJES QUE NO SON TEXTO NI BOTONES ---
+                    # --- OTROS TIPOS ---
                     print(f"Ignorado mensaje tipo '{tipo}' de {from_number}")
                     await enviar_respuesta(from_number, "Por ahora sólo puedo responder a mensajes de texto o botones.")
 
