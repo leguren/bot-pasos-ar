@@ -39,6 +39,10 @@ def procesar_mensaje(user_text, pasos_data):
                 "Consultá el estado de los pasos internacionales de Argentina en tiempo real.\n"
                 "Ingresá el nombre del paso, la provincia en la que se encuentra o el país con el que conecta.")
 
+    # --- Ignorar inputs muy cortos ---
+    if len(texto) < 4:
+        return "Por favor ingresá al menos 4 caracteres para buscar coincidencias. ❌"
+
     # --- Preparar resultados ---
     resultados_nombre = []
     resultados_provincia = {}
@@ -61,8 +65,8 @@ def procesar_mensaje(user_text, pasos_data):
             resultados_provincia.setdefault(paso.get("provincia",""), []).append(paso)
             continue
 
-        # País
-        if texto in pais_norm:
+        # País: solo coincidencia exacta completa
+        if texto == pais_norm:
             resultados_pais.setdefault(paso.get("pais",""), []).append(paso)
             continue
 
@@ -215,4 +219,5 @@ async def webhook(request: Request, background_tasks: BackgroundTasks):
                     background_tasks.add_task(procesar_y_responder, from_number, user_text)
 
     return {"status": "ok"}
+
 
