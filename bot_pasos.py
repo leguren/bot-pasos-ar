@@ -62,7 +62,13 @@ def procesar_mensaje(user_text, pasos_data):
         provincia_norm = normalizar(paso.get("provincia", ""))
         pais_norm = normalizar(paso.get("pais", ""))
 
-        # Prioridad por nombre
+        # --- Estado primero ---
+        if "abierto" in texto and "abierto" in estado_norm:
+            resultados_estado.setdefault("abierto", []).append(paso)
+        elif "cerrado" in texto and "cerrado" in estado_norm:
+            resultados_estado.setdefault("cerrado", []).append(paso)
+
+        # --- Prioridad por nombre ---
         if texto in nombre_norm:
             resultados_nombre.append(paso)
             continue
@@ -72,14 +78,10 @@ def procesar_mensaje(user_text, pasos_data):
             resultados_provincia.setdefault(paso.get("provincia",""), []).append(paso)
             continue
 
-        # País: solo coincidencia exacta completa
-        if texto == pais_norm:
+        # País: coincidencia aproximada
+        if texto in pais_norm:
             resultados_pais.setdefault(paso.get("pais",""), []).append(paso)
             continue
-
-        # Estado
-        if ("abierto" in texto and "abierto" in estado_norm) or ("cerrado" in texto and "cerrado" in estado_norm):
-            resultados_estado.setdefault(paso.get("estado",""), []).append(paso)
 
     # --- Construir mensaje final ---
     msg = ""
@@ -249,4 +251,5 @@ async def webhook(request: Request, background_tasks: BackgroundTasks):
                 background_tasks.add_task(procesar_y_responder, from_number, user_text)
 
     return {"status": "ok"}
+
 
