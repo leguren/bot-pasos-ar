@@ -65,51 +65,63 @@ def procesar_mensaje(user_text, pasos_data):
         if ("abierto" in texto and "abierto" in estado_norm) or ("cerrado" in texto and "cerrado" in estado_norm):
             resultados_estado.setdefault(paso.get("estado",""), []).append(paso)
 
-    # Construir mensaje final
-    msg = ""
+# Construir mensaje final
+msg = ""
+primer_bloque = True  # bandera para controlar el salto de línea
 
-    # --- Resultados por nombre ---
-    for p in resultados_nombre:
+# --- Resultados por nombre ---
+for p in resultados_nombre:
+    icono = emoji_estado(p.get("estado",""))
+    msg += (f"*Paso internacional {p.get('nombre','')}*\n"
+            f"{p.get('localidades','')}\n"
+            f"{p.get('estado','')} {icono}\n"
+            f"{p.get('ultima_actualizacion','')}\n")
+primer_bloque = False if resultados_nombre else True  # si hay resultados por nombre, los siguientes bloques no serán el primero
+
+# --- Resultados por provincia ---
+for provincia, pasos in resultados_provincia.items():
+    if not primer_bloque:
+        msg += "\n"  # salto de línea solo si no es el primer bloque
+    msg += f"👉 *Pasos internacionales en {provincia}*\n"
+    for p in pasos:
         icono = emoji_estado(p.get("estado",""))
         msg += (f"*Paso internacional {p.get('nombre','')}*\n"
                 f"{p.get('localidades','')}\n"
                 f"{p.get('estado','')} {icono}\n"
                 f"{p.get('ultima_actualizacion','')}\n")
+    primer_bloque = False
 
-    # --- Resultados por provincia ---
-    for provincia, pasos in resultados_provincia.items():
-        msg += f"👉 *Pasos internacionales en {provincia}*\n"
-        for p in pasos:
-            icono = emoji_estado(p.get("estado",""))
-            msg += (f"*Paso internacional {p.get('nombre','')}*\n"
-                    f"{p.get('localidades','')}\n"
-                    f"{p.get('estado','')} {icono}\n"
-                    f"{p.get('ultima_actualizacion','')}\n")
+# --- Resultados por país ---
+for pais, pasos in resultados_pais.items():
+    if not primer_bloque:
+        msg += "\n"
+    msg += f"👉 *Pasos internacionales con {pais}*\n"
+    for p in pasos:
+        icono = emoji_estado(p.get("estado",""))
+        msg += (f"*Paso internacional {p.get('nombre','')}*\n"
+                f"{p.get('localidades','')}\n"
+                f"{p.get('estado','')} {icono}\n"
+                f"{p.get('ultima_actualizacion','')}\n")
+    primer_bloque = False
 
-    # --- Resultados por país ---
-    for pais, pasos in resultados_pais.items():
-        msg += f"👉 *Pasos internacionales con {pais}*\n"
-        for p in pasos:
-            icono = emoji_estado(p.get("estado",""))
-            msg += (f"*Paso internacional {p.get('nombre','')}*\n"
-                    f"{p.get('localidades','')}\n"
-                    f"{p.get('estado','')} {icono}\n"
-                    f"{p.get('ultima_actualizacion','')}\n")
+# --- Resultados por estado ---
+for estado, pasos in resultados_estado.items():
+    if not primer_bloque:
+        msg += "\n"
+    msg += f"👉 *Pasos internacionales {estado}s*\n"
+    for p in pasos:
+        icono = emoji_estado(p.get("estado",""))
+        msg += (f"*Paso internacional {p.get('nombre','')}*\n"
+                f"{p.get('localidades','')}\n"
+                f"{p.get('ultima_actualizacion','')}\n")
+    primer_bloque = False
 
-    # --- Resultados por estado ---
-    for estado, pasos in resultados_estado.items():
-        msg += f"👉 *Pasos internacionales {estado}s*\n"
-        for p in pasos:
-            icono = emoji_estado(p.get("estado",""))
-            msg += (f"*Paso internacional {p.get('nombre','')}*\n"
-                    f"{p.get('localidades','')}\n"
-                    f"{p.get('ultima_actualizacion','')}\n")
+# --- Si no hay resultados ---
+if not msg:
+    return ("Consultá el estado de los pasos internacionales de Argentina en tiempo real.\n"
+            "Ingresá el nombre del paso, la provincia en la que se encuentra o el país con el que conecta. 👉")
 
-    if not msg:
-        return ("Consultá el estado de los pasos internacionales de Argentina en tiempo real.\n"
-                "Ingresá el nombre del paso, la provincia en la que se encuentra o el país con el que conecta. 👉")
-
-    return msg.strip()
+return msg.strip()
 
 # === DIVIDIR MENSAJES ===
 MAX_LEN = 4000
@@ -184,3 +196,4 @@ async def webhook(request: Request, background_tasks: BackgroundTasks):
                     background_tasks.add_task(procesar_y_responder, from_number, user_text)
 
     return {"status": "ok"}
+
