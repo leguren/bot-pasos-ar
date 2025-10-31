@@ -42,13 +42,14 @@ def procesar_mensaje(user_text, pasos_data):
     saludos = ["hola"]
     if any(s in texto for s in saludos):
         return ('¡Hola! 👋 ¿Cómo estás?\n\n'
-                'Acá vas a poder consultar el estado de los pasos internacionales de Argentina en tiempo real.\n'
-                '💡 Podés buscar por el nombre del paso, el de la provincia en la que se encuentra o el del país con el que conecta.')
+                'Acá vas a poder consultar el estado de los pasos internacionales de Argentina en tiempo real.\n\n'
+                'Podés buscar por el nombre del paso, el de la provincia en la que se encuentra o el del país con el que conecta.\n'
+                '💡 Por ejemplo: escribí "agua" para buscar los pasos Agua Negra o Aguas Blancas - Bermejo, o "abiertos con Brasil" para buscar todos los pasos abiertos con Brasil.')
 
     # --- Ignorar inputs muy cortos ---
     if len(texto) < 4:
         return ('Por favor, ingresá al menos 4 letras para poder buscar coincidencias.\n\n'
-                '💡 Por ejemplo: escribí "agua" para buscar los pasos Agua Negra o Aguas Blancas - Bermejo.')
+                '💡 Por ejemplo: escribí "agua" para buscar los pasos Agua Negra o Aguas Blancas - Bermejo, o "abiertos con Brasil" para buscar todos los pasos abiertos con Brasil.')
 
     # --- Detectar filtros ---
     filtro_estado = None
@@ -113,7 +114,7 @@ def procesar_mensaje(user_text, pasos_data):
     # --- Construir mensaje final ---
     if not resultados:
         return (f'No encontré pasos que coincidan con "{user_text}".\n\n'
-                'Probá ingresando nuevamente el nombre del paso, el de la provincia en la que se encuentra o el del país con el que conecta.\n'
+                'Probá ingresando nuevamente el nombre del paso, el de la provincia en la que se encuentra o el del país con el que conecta.\n\n'
                 '💡 Recordá que debés ingresar al menos 4 letras para que pueda buscar coincidencias.')
 
     msg = ""
@@ -196,7 +197,7 @@ def procesar_mensaje(user_text, pasos_data):
         if pais:
             titulo += f" con {pais.title()}"
         if estado:
-            titulo += f" {estado}"
+            titulo += f" {estado}s"
         titulo += "*\n\n"
 
         msg += titulo
@@ -280,7 +281,7 @@ async def webhook(request: Request, background_tasks: BackgroundTasks):
                     await enviar_respuesta(
                         from_number,
                         '👀 Por ahora no puedo escuchar audios, ni ver fotos o stickers.\n\n'
-                        'Probá ingresando nuevamente el nombre del paso, el de la provincia en la que se encuentra o el del país con el que conecta.\n'
+                        'Probá ingresando nuevamente el nombre del paso, el de la provincia en la que se encuentra o el del país con el que conecta.\n\n'
                         '💡 Recordá que debés ingresar al menos 4 letras para que pueda buscar coincidencias.'
                     )
                     continue
@@ -310,9 +311,8 @@ async def webhook(request: Request, background_tasks: BackgroundTasks):
                 if len(texto_norm) < 4:
                     await enviar_respuesta(
                         from_number,
-                        'Por favor, ingresá al menos 4 letras para poder buscar coincidencias.\n'
-                        '💡 Por ejemplo: escribí "agua" para buscar los pasos Agua Negra o Aguas Blancas - Bermejo.'
-                    )
+                        'Por favor, ingresá al menos 4 letras para poder buscar coincidencias.\n\n'
+                        '💡 Por ejemplo: escribí "agua" para buscar los pasos Agua Negra o Aguas Blancas - Bermejo, o "abiertos con Brasil" para buscar todos los pasos abiertos con Brasil.')
                     continue  # No llamamos al scraper
 
                 # --- Para el resto de los mensajes ---
@@ -320,6 +320,7 @@ async def webhook(request: Request, background_tasks: BackgroundTasks):
                 background_tasks.add_task(procesar_y_responder, from_number, user_text)
 
     return {"status": "ok"}
+
 
 
 
