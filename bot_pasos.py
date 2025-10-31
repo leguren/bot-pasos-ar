@@ -193,7 +193,7 @@ async def webhook(request: Request, background_tasks: BackgroundTasks):
 
                     if tipo != "text":
                         print(f"Ignorado mensaje tipo '{tipo}' de {from_number}")
-                        await enviar_respuesta(from_number, "👀 Por ahora sólo puedo responder a mensajes de texto."\n"
+                        await enviar_respuesta(from_number, "👀 Por ahora sólo puedo responder a mensajes de texto.\n"
                                                             "Probá ingresando nuevamente el nombre del paso, la provincia o el país con el que conecta.")
                         continue
 
@@ -215,3 +215,4 @@ async def webhook(request: Request, background_tasks: BackgroundTasks):
                     background_tasks.add_task(procesar_y_responder, from_number, user_text)
 
     return {"status": "ok"}
+
