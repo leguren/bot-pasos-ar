@@ -11,7 +11,7 @@ WHATSAPP_TOKEN = os.environ.get("WHATSAPP_TOKEN")
 PHONE_ID = os.environ.get("PHONE_ID")
 SCRAPER_URL = "https://scraper-pasos-ar-184988071501.southamerica-east1.run.app/scrapear"
 
-# --- FUNCIONES DE LOGICA ---
+# --- FUNCIONES DE LÓGICA ---
 def normalizar(texto):
     if not texto:
         return ""
@@ -196,8 +196,7 @@ async def webhook(request: Request, background_tasks: BackgroundTasks):
 
                     if tipo == "text":
                         user_text = message["text"]["body"].strip()
-                        # enviamos "Procesando tu solicitud" primero
-                        await enviar_respuesta(from_number, "Procesando tu solicitud... ⏳")
+                        # --- procesar directamente ---
                         background_tasks.add_task(procesar_y_responder, from_number, user_text)
                         continue
 
@@ -223,4 +222,5 @@ async def webhook(request: Request, background_tasks: BackgroundTasks):
                                 for parte in dividir_mensaje(resultado):
                                     await enviar_respuesta(from_number, parte)
                         continue
+
     return {"status": "ok"}
