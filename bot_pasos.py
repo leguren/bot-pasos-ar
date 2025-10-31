@@ -68,7 +68,6 @@ def procesar_mensaje(user_text, pasos_data):
         return (f"*Paso internacional {p.get('nombre', '')}*\n"
                 f"{p.get('localidades', '')}\n"
                 f"{p.get('estado', '')} {icono}\n"
-                f"{p.get('provincia', '')} - {p.get('pais', '')}\n"
                 f"{p.get('ultima_actualizacion', '')}\n")
 
     # --- Construcción del mensaje final ---
@@ -175,6 +174,7 @@ async def webhook(request: Request, background_tasks: BackgroundTasks):
                     background_tasks.add_task(procesar_y_responder, from_number, user_text)
 
     return {"status": "ok"}
+
 
 
 
