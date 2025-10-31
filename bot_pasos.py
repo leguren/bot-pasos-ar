@@ -109,7 +109,6 @@ async def enviar_bienvenida_con_botones(to_number):
             "body": {"text": "Hola 👋! Podés consultar los pasos internacionales por nombre, provincia o usando estos botones:"},
             "action": {
                 "buttons": [
-                    {"type": "reply", "reply": {"id": "ver_todos", "title": "Ver todos los pasos"}},
                     {"type": "reply", "reply": {"id": "ver_abiertos", "title": "Ver solo los abiertos"}},
                     {"type": "reply", "reply": {"id": "ver_cerrados", "title": "Ver solo los cerrados"}},
                     {"type": "reply", "reply": {"id": "buscar_pais", "title": "Buscar por país"}}
@@ -132,7 +131,6 @@ async def enviar_no_encontrado_con_botones(to_number):
             "body": {"text": "No encontré lo que estás buscando. Intentá nuevamente o probá con estos botones:"},
             "action": {
                 "buttons": [
-                    {"type": "reply", "reply": {"id": "ver_todos", "title": "Ver todos los pasos"}},
                     {"type": "reply", "reply": {"id": "ver_abiertos", "title": "Ver solo los abiertos"}},
                     {"type": "reply", "reply": {"id": "ver_cerrados", "title": "Ver solo los cerrados"}},
                     {"type": "reply", "reply": {"id": "buscar_pais", "title": "Buscar por país"}}
@@ -224,3 +222,4 @@ async def webhook(request: Request, background_tasks: BackgroundTasks):
                         continue
 
     return {"status": "ok"}
+
