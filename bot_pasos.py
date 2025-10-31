@@ -51,12 +51,19 @@ def procesar_mensaje(user_text, pasos_data):
         return ('Por favor, ingresá al menos 4 letras para poder buscar coincidencias.\n\n'
                 '💡 Por ejemplo: escribí "agua" para buscar los pasos Agua Negra o Aguas Blancas - Bermejo, o "abiertos con Brasil" para buscar todos los pasos abiertos con Brasil.')
 
-    # --- Detectar filtros ---
-    filtro_estado = None
-    if "abierto" in texto:
-        filtro_estado = "abierto"
-    elif "cerrado" in texto:
-        filtro_estado = "cerrado"
+# --- Detectar filtros ---
+estados_map = {
+    "abierto": "abierto",
+    "abiertos": "abierto",
+    "cerrado": "cerrado",
+    "cerrados": "cerrado"
+}
+
+filtro_estado = None
+for k, v in estados_map.items():
+    if k in texto:
+        filtro_estado = v
+        break
 
     filtro_provincias = set()
     filtro_paises = set()
@@ -320,6 +327,7 @@ async def webhook(request: Request, background_tasks: BackgroundTasks):
                 background_tasks.add_task(procesar_y_responder, from_number, user_text)
 
     return {"status": "ok"}
+
 
 
 
