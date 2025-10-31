@@ -31,10 +31,15 @@ def emoji_estado(estado: str) -> str:
 def procesar_mensaje(user_text, pasos_data):
     """Procesamiento avanzado: clasifica resultados según coincidencia y prioriza por nombre."""
     texto = normalizar(user_text)
-    if not texto:
-        return ("Consultá el estado de los pasos internacionales de Argentina en tiempo real.\n"
-                "Ingresá el nombre del paso, la provincia en la que se encuentra o el país con el que conecta. 👉")
 
+    # --- Mensaje de bienvenida ---
+    saludos = ["hola"]
+    if any(s in texto for s in saludos):
+        return ("¡Hola! 👋\n"
+                "Consultá el estado de los pasos internacionales de Argentina en tiempo real.\n"
+                "Ingresá el nombre del paso, la provincia en la que se encuentra o el país con el que conecta.")
+
+    # --- Preparar resultados ---
     resultados_nombre = []
     resultados_provincia = {}
     resultados_pais = {}
@@ -46,82 +51,82 @@ def procesar_mensaje(user_text, pasos_data):
         provincia_norm = normalizar(paso.get("provincia", ""))
         pais_norm = normalizar(paso.get("pais", ""))
 
-        # 1️⃣ Coincidencia por nombre
+        # Prioridad por nombre
         if texto in nombre_norm:
             resultados_nombre.append(paso)
-            continue  # prioridad nombre: si coincide, no se agrega a provincia/pais/estado
+            continue
 
-        # 2️⃣ Coincidencia por provincia
+        # Provincia
         if texto in provincia_norm:
             resultados_provincia.setdefault(paso.get("provincia",""), []).append(paso)
             continue
 
-        # 3️⃣ Coincidencia por país
+        # País
         if texto in pais_norm:
             resultados_pais.setdefault(paso.get("pais",""), []).append(paso)
             continue
 
-        # 4️⃣ Coincidencia por estado
+        # Estado
         if ("abierto" in texto and "abierto" in estado_norm) or ("cerrado" in texto and "cerrado" in estado_norm):
             resultados_estado.setdefault(paso.get("estado",""), []).append(paso)
 
-# Construir mensaje final
-msg = ""
-primer_bloque = True  # bandera para controlar el salto de línea
+    # --- Construir mensaje final ---
+    msg = ""
+    primer_bloque = True
 
-# --- Resultados por nombre ---
-for p in resultados_nombre:
-    icono = emoji_estado(p.get("estado",""))
-    msg += (f"*Paso internacional {p.get('nombre','')}*\n"
-            f"{p.get('localidades','')}\n"
-            f"{p.get('estado','')} {icono}\n"
-            f"{p.get('ultima_actualizacion','')}\n")
-primer_bloque = False if resultados_nombre else True  # si hay resultados por nombre, los siguientes bloques no serán el primero
-
-# --- Resultados por provincia ---
-for provincia, pasos in resultados_provincia.items():
-    if not primer_bloque:
-        msg += "\n"  # salto de línea solo si no es el primer bloque
-    msg += f"👉 *Pasos internacionales en {provincia}*\n"
-    for p in pasos:
+    # Resultados por nombre
+    for p in resultados_nombre:
         icono = emoji_estado(p.get("estado",""))
         msg += (f"*Paso internacional {p.get('nombre','')}*\n"
                 f"{p.get('localidades','')}\n"
                 f"{p.get('estado','')} {icono}\n"
                 f"{p.get('ultima_actualizacion','')}\n")
-    primer_bloque = False
+    primer_bloque = False if resultados_nombre else True
 
-# --- Resultados por país ---
-for pais, pasos in resultados_pais.items():
-    if not primer_bloque:
-        msg += "\n"
-    msg += f"👉 *Pasos internacionales con {pais}*\n"
-    for p in pasos:
-        icono = emoji_estado(p.get("estado",""))
-        msg += (f"*Paso internacional {p.get('nombre','')}*\n"
-                f"{p.get('localidades','')}\n"
-                f"{p.get('estado','')} {icono}\n"
-                f"{p.get('ultima_actualizacion','')}\n")
-    primer_bloque = False
+    # Resultados por provincia
+    for provincia, pasos in resultados_provincia.items():
+        if not primer_bloque:
+            msg += "\n"
+        msg += f"👉 *Pasos internacionales en {provincia}*\n"
+        for p in pasos:
+            icono = emoji_estado(p.get("estado",""))
+            msg += (f"*Paso internacional {p.get('nombre','')}*\n"
+                    f"{p.get('localidades','')}\n"
+                    f"{p.get('estado','')} {icono}\n"
+                    f"{p.get('ultima_actualizacion','')}\n")
+        primer_bloque = False
 
-# --- Resultados por estado ---
-for estado, pasos in resultados_estado.items():
-    if not primer_bloque:
-        msg += "\n"
-    msg += f"👉 *Pasos internacionales {estado}s*\n"
-    for p in pasos:
-        icono = emoji_estado(p.get("estado",""))
-        msg += (f"*Paso internacional {p.get('nombre','')}*\n"
-                f"{p.get('localidades','')}\n"
-                f"{p.get('ultima_actualizacion','')}\n")
-    primer_bloque = False
+    # Resultados por país
+    for pais, pasos in resultados_pais.items():
+        if not primer_bloque:
+            msg += "\n"
+        msg += f"👉 *Pasos internacionales con {pais}*\n"
+        for p in pasos:
+            icono = emoji_estado(p.get("estado",""))
+            msg += (f"*Paso internacional {p.get('nombre','')}*\n"
+                    f"{p.get('localidades','')}\n"
+                    f"{p.get('estado','')} {icono}\n"
+                    f"{p.get('ultima_actualizacion','')}\n")
+        primer_bloque = False
 
-# --- Si no hay resultados ---
-if not msg:
-    return ("Consultá el estado de los pasos internacionales de Argentina en tiempo real.\n"
-            "Ingresá el nombre del paso, la provincia en la que se encuentra o el país con el que conecta. 👉")
+    # Resultados por estado
+    for estado, pasos in resultados_estado.items():
+        if not primer_bloque:
+            msg += "\n"
+        msg += f"👉 *Pasos internacionales {estado}s*\n"
+        for p in pasos:
+            icono = emoji_estado(p.get("estado",""))
+            msg += (f"*Paso internacional {p.get('nombre','')}*\n"
+                    f"{p.get('localidades','')}\n"
+                    f"{p.get('ultima_actualizacion','')}\n")
+        primer_bloque = False
 
-return msg.strip()
+    # --- Mensaje si no se encontró coincidencia ---
+    if not msg:
+        return (f"No encontré pasos que coincidan con '{user_text}'. ❌\n"
+                "Probá ingresando nuevamente el nombre del paso, la provincia o el país con el que conecta.")
+
+    return msg.strip()
 
 # === DIVIDIR MENSAJES ===
 MAX_LEN = 4000
@@ -188,7 +193,7 @@ async def webhook(request: Request, background_tasks: BackgroundTasks):
 
                     if tipo != "text":
                         print(f"Ignorado mensaje tipo '{tipo}' de {from_number}")
-                        await enviar_respuesta(from_number, "Por ahora sólo puedo responder a mensajes de texto.")
+                        await enviar_respuesta(from_number, "👀 Por ahora sólo puedo responder a mensajes de texto.")
                         continue
 
                     user_text = message["text"]["body"].strip()
@@ -196,4 +201,5 @@ async def webhook(request: Request, background_tasks: BackgroundTasks):
                     background_tasks.add_task(procesar_y_responder, from_number, user_text)
 
     return {"status": "ok"}
+
 
