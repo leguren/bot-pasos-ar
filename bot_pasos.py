@@ -69,7 +69,6 @@ def procesar_mensaje(user_text, pasos_data):
         pais_norm = normalizar(paso.get("pais",""))
         nombre_norm = normalizar(paso.get("nombre",""))
 
-        # Filtros por provincia, país o nombre
         if provincia_norm in texto:
             filtro_provincias.add(provincia_norm)
         if pais_norm in texto:
@@ -80,28 +79,16 @@ def procesar_mensaje(user_text, pasos_data):
     # --- Construir resultados ---
     resultados = []
 
-    if todos:
-        # Si dice "todos", incluimos todos los pasos que cumplan filtros adicionales
-        for paso in pasos_data:
-            estado_norm = normalizar(paso.get("estado",""))
-            provincia_norm = normalizar(paso.get("provincia",""))
-            pais_norm = normalizar(paso.get("pais",""))
-            cumple = True
-            if filtro_estado and filtro_estado not in estado_norm:
-                cumple = False
-            if filtro_provincias and provincia_norm not in filtro_provincias:
-                cumple = False
-            if filtro_paises and pais_norm not in filtro_paises:
-                cumple = False
-            if cumple:
-                resultados.append(paso)
+    if todos and not (filtro_estado or filtro_provincias or filtro_paises):
+        # Caso "todos" solo: devolver toda la lista
+        resultados = pasos_data[:]
     else:
-        # --- Determinar si es búsqueda combinada ---
+        # Caso con filtros o búsqueda normal
         num_filtros = sum(bool(x) for x in [filtro_estado, filtro_provincias, filtro_paises])
         combinada = num_filtros > 1
 
-        if combinada:
-            # Búsqueda combinada
+        if combinada or todos:
+            # Búsqueda combinada o "todos con filtros"
             for paso in pasos_data:
                 estado_norm = normalizar(paso.get("estado",""))
                 provincia_norm = normalizar(paso.get("provincia",""))
@@ -141,7 +128,6 @@ def procesar_mensaje(user_text, pasos_data):
     primer_bloque = True
 
     from collections import defaultdict
-    # --- Agrupar resultados ---
     grouped_simple = defaultdict(list)
     grouped_combinada = defaultdict(list)
 
@@ -152,7 +138,7 @@ def procesar_mensaje(user_text, pasos_data):
         nombre_norm = normalizar(paso.get("nombre",""))
 
         num_filtros = sum(bool(x) for x in [filtro_estado, filtro_provincias, filtro_paises])
-        combinada = num_filtros > 1
+        combinada = num_filtros > 1 or todos
 
         if combinada:
             key = (provincia_norm if provincia_norm in filtro_provincias else None,
