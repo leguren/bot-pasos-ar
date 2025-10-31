@@ -47,8 +47,8 @@ def procesar_mensaje(user_text, pasos_data):
 
     # --- Ignorar inputs muy cortos ---
     if len(texto) < 4:
-        return 'Por favor, ingresá al menos 4 letras para poder buscar coincidencias.\n'
-        'Por ejemplo: escribí "agua" para buscar los pasos Agua Negra o Aguas Blancas - Bermejo.'
+        return ('Por favor, ingresá al menos 4 letras para poder buscar coincidencias.\n'
+        'Por ejemplo: escribí "agua" para buscar los pasos Agua Negra o Aguas Blancas - Bermejo.')
 
     # --- Preparar resultados ---
     resultados_nombre = []
@@ -241,3 +241,4 @@ async def webhook(request: Request, background_tasks: BackgroundTasks):
                 background_tasks.add_task(procesar_y_responder, from_number, user_text)
 
     return {"status": "ok"}
+
