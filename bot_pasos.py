@@ -35,7 +35,7 @@ def emoji_estado(estado: str) -> str:
     return "⚪"
 
 def procesar_mensaje(user_text, pasos_data):
-    """Procesamiento avanzado: soporta búsqueda simple y combinada, con títulos dinámicos."""
+    """Procesamiento avanzado: soporta búsqueda simple, combinada, y la palabra 'todos' con filtros."""
     texto = normalizar(user_text)
 
     # --- Mensaje de bienvenida ---
@@ -62,11 +62,14 @@ def procesar_mensaje(user_text, pasos_data):
     filtro_paises = set()
     nombres = []
 
+    todos = "todos" in texto
+
     for paso in pasos_data:
         provincia_norm = normalizar(paso.get("provincia",""))
         pais_norm = normalizar(paso.get("pais",""))
         nombre_norm = normalizar(paso.get("nombre",""))
 
+        # Filtros por provincia, país o nombre
         if provincia_norm in texto:
             filtro_provincias.add(provincia_norm)
         if pais_norm in texto:
@@ -74,14 +77,11 @@ def procesar_mensaje(user_text, pasos_data):
         if nombre_norm in texto:
             nombres.append(paso)
 
-    # --- Determinar si es búsqueda combinada ---
-    num_filtros = sum(bool(x) for x in [filtro_estado, filtro_provincias, filtro_paises])
-    combinada = num_filtros > 1
-
+    # --- Construir resultados ---
     resultados = []
 
-    if combinada:
-        # Búsqueda combinada
+    if todos:
+        # Si dice "todos", incluimos todos los pasos que cumplan filtros adicionales
         for paso in pasos_data:
             estado_norm = normalizar(paso.get("estado",""))
             provincia_norm = normalizar(paso.get("provincia",""))
@@ -96,20 +96,40 @@ def procesar_mensaje(user_text, pasos_data):
             if cumple:
                 resultados.append(paso)
     else:
-        # Búsqueda simple: nombre, provincia, país, estado
-        resultados = nombres[:]
-        for paso in pasos_data:
-            estado_norm = normalizar(paso.get("estado",""))
-            provincia_norm = normalizar(paso.get("provincia",""))
-            pais_norm = normalizar(paso.get("pais",""))
+        # --- Determinar si es búsqueda combinada ---
+        num_filtros = sum(bool(x) for x in [filtro_estado, filtro_provincias, filtro_paises])
+        combinada = num_filtros > 1
 
-            if paso not in resultados:
-                if filtro_estado and filtro_estado in estado_norm:
+        if combinada:
+            # Búsqueda combinada
+            for paso in pasos_data:
+                estado_norm = normalizar(paso.get("estado",""))
+                provincia_norm = normalizar(paso.get("provincia",""))
+                pais_norm = normalizar(paso.get("pais",""))
+                cumple = True
+                if filtro_estado and filtro_estado not in estado_norm:
+                    cumple = False
+                if filtro_provincias and provincia_norm not in filtro_provincias:
+                    cumple = False
+                if filtro_paises and pais_norm not in filtro_paises:
+                    cumple = False
+                if cumple:
                     resultados.append(paso)
-                elif provincia_norm in filtro_provincias:
-                    resultados.append(paso)
-                elif pais_norm in filtro_paises:
-                    resultados.append(paso)
+        else:
+            # Búsqueda simple: nombre, provincia, país, estado
+            resultados = nombres[:]
+            for paso in pasos_data:
+                estado_norm = normalizar(paso.get("estado",""))
+                provincia_norm = normalizar(paso.get("provincia",""))
+                pais_norm = normalizar(paso.get("pais",""))
+
+                if paso not in resultados:
+                    if filtro_estado and filtro_estado in estado_norm:
+                        resultados.append(paso)
+                    elif provincia_norm in filtro_provincias:
+                        resultados.append(paso)
+                    elif pais_norm in filtro_paises:
+                        resultados.append(paso)
 
     # --- Construir mensaje final ---
     if not resultados:
@@ -130,6 +150,9 @@ def procesar_mensaje(user_text, pasos_data):
         provincia_norm = normalizar(paso.get("provincia",""))
         pais_norm = normalizar(paso.get("pais",""))
         nombre_norm = normalizar(paso.get("nombre",""))
+
+        num_filtros = sum(bool(x) for x in [filtro_estado, filtro_provincias, filtro_paises])
+        combinada = num_filtros > 1
 
         if combinada:
             key = (provincia_norm if provincia_norm in filtro_provincias else None,
