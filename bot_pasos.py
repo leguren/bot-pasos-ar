@@ -97,10 +97,8 @@ def procesar_mensaje(user_text, pasos_data):
     if todos and not (filtro_estado or filtro_provincias or filtro_paises):
         resultados = pasos_data[:]
     else:
-        num_filtros = sum(bool(x) for x in [filtro_estado, filtro_provincias, filtro_paises])
-        combinada = num_filtros > 1
-
-        if combinada or todos:
+        # Si hay cualquier filtro, usamos lógica combinada
+        if filtro_estado or filtro_provincias or filtro_paises or todos:
             for paso in pasos_data:
                 estado_norm = normalizar(paso.get("estado",""))
                 provincia_norm = normalizar(paso.get("provincia",""))
@@ -115,19 +113,9 @@ def procesar_mensaje(user_text, pasos_data):
                 if cumple:
                     resultados.append(paso)
         else:
-            resultados = nombres[:]
-            for paso in pasos_data:
-                estado_norm = normalizar(paso.get("estado",""))
-                provincia_norm = normalizar(paso.get("provincia",""))
-                pais_norm = normalizar(paso.get("pais",""))
-
-                if paso not in resultados:
-                    if filtro_estado and filtro_estado in estado_norm:
-                        resultados.append(paso)
-                    elif provincia_norm in filtro_provincias:
-                        resultados.append(paso)
-                    elif pais_norm in filtro_paises:
-                        resultados.append(paso)
+            # Solo búsqueda por nombre / frase / palabras ≥4
+            for paso in nombres:
+                resultados.append(paso)
 
     # --- Construir mensaje final ---
     if not resultados:
@@ -148,8 +136,7 @@ def procesar_mensaje(user_text, pasos_data):
         pais_norm = normalizar(paso.get("pais",""))
         nombre_norm = normalizar(paso.get("nombre",""))
 
-        num_filtros = sum(bool(x) for x in [filtro_estado, filtro_provincias, filtro_paises])
-        combinada = num_filtros > 1 or todos
+        combinada = filtro_estado or filtro_provincias or filtro_paises or todos
 
         if combinada:
             key = (provincia_norm if provincia_norm in filtro_provincias else None,
@@ -339,4 +326,5 @@ async def webhook(request: Request, background_tasks: BackgroundTasks):
                 background_tasks.add_task(procesar_y_responder, from_number, user_text)
 
     return {"status": "ok"}
+
 
