@@ -36,7 +36,8 @@ def emoji_estado(estado: str) -> str:
 
 def procesar_mensaje(user_text, pasos_data):
     """Procesamiento avanzado: soporta búsqueda simple, combinada, y la palabra 'todos' con filtros.
-       Se aplica coincidencia parcial por nombre, provincia y país, sin stopwords."""
+       Coincidencia de frase completa primero, luego palabras ≥4 caracteres.
+       La búsqueda por país es exacta."""
     texto = normalizar(user_text)
 
     # --- Mensaje de bienvenida ---
@@ -65,8 +66,8 @@ def procesar_mensaje(user_text, pasos_data):
 
     todos = "todos" in texto
 
-    # Dividimos el texto en palabras, sin eliminar nada
-    user_words = texto.split()
+    # --- Preparar palabras de búsqueda (≥4 caracteres) ---
+    user_words = [w for w in texto.split() if len(w) >= 4]
 
     for paso in pasos_data:
         provincia_norm = normalizar(paso.get("provincia",""))
@@ -75,15 +76,19 @@ def procesar_mensaje(user_text, pasos_data):
         estado_norm = normalizar(paso.get("estado",""))
 
         # --- Búsqueda por nombre ---
-        if any(word in nombre_norm for word in user_words):
+        if texto in nombre_norm:  # coincidencia de frase completa
+            nombres.append(paso)
+        elif any(word in nombre_norm for word in user_words):
             nombres.append(paso)
 
         # --- Búsqueda por provincia ---
-        if any(word in provincia_norm for word in user_words):
+        if texto in provincia_norm:
+            filtro_provincias.add(provincia_norm)
+        elif any(word in provincia_norm for word in user_words):
             filtro_provincias.add(provincia_norm)
 
-        # --- Búsqueda por país ---
-        if any(word in pais_norm for word in user_words):
+        # --- Búsqueda por país: solo coincidencia exacta ---
+        if texto == pais_norm:
             filtro_paises.add(pais_norm)
 
     # --- Construir resultados ---
@@ -152,7 +157,7 @@ def procesar_mensaje(user_text, pasos_data):
                    estado_norm if filtro_estado and filtro_estado in estado_norm else None)
             grouped_combinada[key].append(paso)
         else:
-            if any(word in nombre_norm for word in user_words):
+            if texto in nombre_norm or any(word in nombre_norm for word in user_words):
                 grouped_simple["nombre"].append(paso)
             elif provincia_norm in filtro_provincias:
                 grouped_simple[f"provincia:{provincia_norm}"].append(paso)
@@ -334,3 +339,4 @@ async def webhook(request: Request, background_tasks: BackgroundTasks):
                 background_tasks.add_task(procesar_y_responder, from_number, user_text)
 
     return {"status": "ok"}
+
