@@ -252,6 +252,10 @@ async def webhook(request: Request, background_tasks: BackgroundTasks):
                 tipo = message.get("type", "")
                 from_number = message.get("from")
 
+                # ✅ LOG DE MENSAJE RECIBIDO
+                user_text = message.get("text", {}).get("body", "")
+                logging.info(f"📩 Mensaje recibido de {from_number}: {user_text}")                
+
                 if tipo != "text":
                     logging.info("Ignorado mensaje tipo '%s' de %s", tipo, from_number)
                     await enviar_respuesta(
@@ -296,3 +300,4 @@ async def webhook(request: Request, background_tasks: BackgroundTasks):
                 background_tasks.add_task(procesar_y_responder, from_number, user_text)
 
     return {"status": "ok"}
+
