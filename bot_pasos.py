@@ -35,7 +35,8 @@ def emoji_estado(estado: str) -> str:
     return "⚪"
 
 def procesar_mensaje(user_text, pasos_data):
-    """Búsqueda simple y combinada, país exacto, palabras ≥4 caracteres, sin romper filtros simples."""
+    """Búsqueda simple y combinada, país exacto, palabras ≥4 caracteres, sin romper filtros simples.
+       Maneja correctamente palabras genéricas 'paso' y 'puerto'."""
     texto = normalizar(user_text)
 
     # --- Mensaje de bienvenida ---
@@ -63,25 +64,44 @@ def procesar_mensaje(user_text, pasos_data):
     nombres = []
 
     todos = "todos" in texto
-    user_words = [w for w in texto.split() if len(w) >= 4]
 
-    # --- Preparar filtros ---
+    # --- Manejar palabras genéricas 'paso' y 'puerto' ---
+    palabras = texto.split()
+    buscar_todas_las_palabras_genericas = False
+    palabras_filtradas = []
+
+    if palabras and palabras[0] in ["paso", "puerto"]:
+        if len(palabras) == 1:
+            buscar_todas_las_palabras_genericas = True  # solo "paso" o "puerto"
+        else:
+            palabras_filtradas = [w for w in palabras[1:] if len(w) >= 4]
+    else:
+        palabras_filtradas = [w for w in palabras if len(w) >= 4]
+
     for paso in pasos_data:
         provincia_norm = normalizar(paso.get("provincia",""))
         pais_norm = normalizar(paso.get("pais",""))
         nombre_norm = normalizar(paso.get("nombre",""))
 
-        # Nombre: coincidencia frase completa o palabra ≥4
-        if texto in nombre_norm or any(word in nombre_norm for word in user_words):
-            nombres.append(paso)
+        # --- Búsqueda por nombre ---
+        if buscar_todas_las_palabras_genericas:
+            if palabras[0] in nombre_norm:
+                nombres.append(paso)
+        else:
+            # coincidencia de frase completa
+            if texto in nombre_norm:
+                nombres.append(paso)
+            # coincidencia por palabras filtradas ≥4 caracteres
+            elif any(w in nombre_norm for w in palabras_filtradas):
+                nombres.append(paso)
 
-        # Provincia: frase completa o palabra ≥4
-        if texto in provincia_norm or any(word in provincia_norm for word in user_words):
+        # --- Búsqueda por provincia ---
+        if texto in provincia_norm or any(w in provincia_norm for w in palabras_filtradas):
             filtro_provincias.add(provincia_norm)
 
-        # País: coincidencia exacta de palabra
-        for word in user_words:
-            if word == pais_norm:
+        # --- Búsqueda por país: coincidencia exacta ---
+        for w in palabras_filtradas:
+            if w == pais_norm:
                 filtro_paises.add(pais_norm)
 
     # --- Construir resultados ---
@@ -89,12 +109,10 @@ def procesar_mensaje(user_text, pasos_data):
     resultados_simples = []
 
     if filtro_estado or filtro_provincias or filtro_paises or todos:
-        # Lógica combinada
         for paso in pasos_data:
             estado_norm = normalizar(paso.get("estado",""))
             provincia_norm = normalizar(paso.get("provincia",""))
             pais_norm = normalizar(paso.get("pais",""))
-
             cumple = True
             if filtro_estado and filtro_estado not in estado_norm:
                 cumple = False
@@ -105,7 +123,6 @@ def procesar_mensaje(user_text, pasos_data):
             if cumple:
                 resultados_combinados.append(paso)
     else:
-        # Solo búsqueda simple por nombre/provincia/estado/pais
         resultados_simples = nombres[:]
 
     # --- Construir mensaje final ---
@@ -279,6 +296,3 @@ async def webhook(request: Request, background_tasks: BackgroundTasks):
                 background_tasks.add_task(procesar_y_responder, from_number, user_text)
 
     return {"status": "ok"}
-
-
-
